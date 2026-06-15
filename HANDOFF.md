@@ -34,6 +34,13 @@
 - 전체삭제(🗑)를 hover 미니툴바 → 정리 탭 헤더(빨강 버튼)로 이동. 패널 항목별 ✕ 개별 삭제 추가.
 - 단축키 재편: 백틱=접기/펼치기(처음 펼칠 때만 형광펜 ON), Alt+1~4(형광펜·네모·정리·Notion), AI 요약 단축키 제거.
 
+## 1-c. 내보내기 시 분류 선택 (0.5.0) — `src/content/content.js`, `src/background/worker.js`
+현재 PC 실조건 확인 완료:
+- 📝 Notion 누르면 즉시 저장 안 하고 **선택 패널** 먼저 표시: 인박스 DB의 `분류`(select) 옵션을 실시간 조회(`notion-categories` → `notionGetCategories` → `GET /data_sources/{id}` 의 `properties.분류.select.options`)해 칩 버튼으로 노출. `미분류` 항상 포함.
+- **직접 입력** 칸으로 새 분류 즉석 생성(Notion API가 없는 select 옵션 자동 생성). `notionRowProps`가 `spec.category` 사용(없으면 미분류).
+- AI 요약 포함 여부를 같은 패널 체크박스로 통합(기존 confirm 팝업 제거). 함수: `showNotionPicker`/`renderNotionPicker`/`sendNotionExport`.
+- **버그 수정**: 패널이 Shadow DOM이 아니라 호스트 페이지 DOM이라 사이트 CSS(`button:hover/:focus` 등)가 새어들어 칩 색이 오락가락·검정으로 보였음 → 칩/입력창/버튼/라벨 인라인 스타일에 `!important`로 고정(인라인 important가 호스트 `!important`까지 이김).
+
 ## 2. 다음 할 일 (대기 중)
 - (없음 — 현재까지 요청 모두 반영)
 

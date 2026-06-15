@@ -53,6 +53,8 @@ options.html / options.js               # API 키 입력
   - 검증: 신규생성 경로 실조건 확인(현재 PC). **재사용 경로(2번째 PC) 미검증** — 2026-06-15 저녁 예정.
 - [x] **8. UX 다듬기 (0.4.0)** — 첫 주석 작성 시 도구막대 펼침+정리 탭 자동 표시(1회), 도구막대 ⠿ 손잡이 하나로 도구막대+패널 함께 이동(패널 자체 핸들 제거, 접힘 중에도 동행), 패널 가로폭=도구막대 폭(좌·우변 정렬), 전체삭제(🗑)를 hover 미니툴바 → 정리 탭 헤더로 이동, 주석 정리 패널에서 항목별 ✕ 개별 삭제. 단축키 재편: 백틱=도구막대 접기/펼치기(처음 펼칠 때만 형광펜 ON), Alt+1~4(형광펜·네모·정리·Notion), AI 요약 단축키(구 Alt+5) 제거.
   - 검증: 실조건 확인(현재 PC) — 자동펼침·동행 이동·폭 맞춤·삭제 UX·단축키 동작.
+- [x] **9. 내보내기 시 분류 선택 (0.5.0)** — 📝 Notion 누르면 바로 저장하지 않고, 인박스 DB의 `분류`(select) 옵션을 실시간 조회해 칩 버튼으로 보여주는 선택 패널을 먼저 띄움. 직접 입력으로 새 분류 즉석 생성(Notion이 없는 옵션 자동 생성), AI 요약 포함 여부도 같은 패널의 체크박스로 통합(구 confirm 제거). → 저장 후 Notion에서 분류 칸 누르는 수고 제거.
+  - 검증: 실조건 확인(현재 PC) — 칩 조회·선택·직접입력·요약 체크 동작. 칩/입력창 스타일은 호스트 사이트 CSS 침범 막으려 인라인 `!important`로 고정.
 
 ## 게이트웨이 메모 (2026-06-13 실측)
 
@@ -64,7 +66,7 @@ options.html / options.js               # API 키 입력
 
 - API 호출은 전부 background worker 에서 (`api.notion.com` host_permissions 추가) → CORS 우회. Notion API 는 CORS 헤더 미제공이라 콘텐츠 스크립트 직접 호출 불가.
 - 헤더: `Notion-Version: 2026-03-11`. 인증: 옵션 페이지에 통합 토큰 + 부모 페이지(통합과 Connections 공유 필요) 입력.
-- **인박스 DB**: 첫 내보내기 때 부모 페이지 아래 DB 1회 자동 생성(`POST /databases` + `initial_data_source`), 응답의 `data_sources[0].id` 를 저장·재사용. 이후 저장은 행 생성(`parent.data_source_id` — 2025-09-03+ 부터 행 부모는 database_id 가 아니라 data_source_id). 속성: 제목·URL·저장일·분류(기본 미분류)·하이라이트·네모·요약포함. 본문은 주석을 위치순 인터리브 + AI요약(선택)만 두고, URL·네모수는 속성에만(중복 제거).
+- **인박스 DB**: 첫 내보내기 때 부모 페이지 아래 DB 1회 자동 생성(`POST /databases` + `initial_data_source`), 응답의 `data_sources[0].id` 를 저장·재사용. 이후 저장은 행 생성(`parent.data_source_id` — 2025-09-03+ 부터 행 부모는 database_id 가 아니라 data_source_id). 속성: 제목·URL·저장일·분류(내보내기 패널에서 선택, 미선택 시 미분류)·하이라이트·네모·요약포함. 본문은 주석을 위치순 인터리브 + AI요약(선택)만 두고, URL·네모수는 속성에만(중복 제거).
 - **DB 확보·다중 PC 연결 (0.3.1)**: 로컬 캐시(`notion_data_source_id`+`notion_db_parent`) 우선 → 없으면 부모 페이지의 `child_database` 블록 중 제목 `Reading Highlighter 인박스` 매칭으로 탐색해 **0개=생성 / 1개=재사용+캐시 / 2개+=옵션 페이지에서 선택**(`notion-connect`/`notion-pick-db`). 덕분에 다른 PC도 같은 부모 페이지 ID 면 같은 DB 에 연결(로컬 캐시 비의존). 부모 페이지가 바뀌면 그 페이지 기준으로 다시 탐색.
 - 부모 페이지 ID 는 URL 맨 끝 32자리 hex(끝에서부터 추출) — 슬러그의 날짜 등 hex-유사 숫자가 ID 앞에 붙는 함정 주의. `?v=뷰ID` 쿼리도 먼저 제거.
 - 이미지: File Upload API 3단계(`POST /file_uploads` → `/send` 멀티파트 → image 블록의 `file_upload.id`). 페이지 children 은 요청당 100개 제한 → 초과분 PATCH append.

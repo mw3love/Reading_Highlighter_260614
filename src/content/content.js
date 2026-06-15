@@ -1288,24 +1288,131 @@
       .filter(Boolean);
     const hlCount = sorted.filter((it) => it.type === "highlight").length;
     const rectCount = sorted.filter((it) => it.type === "rect" && it.image).length;
-    let summary = collectSummaryForNotion();
-    // 요약이 떠 있으면 같이 보낼지 물어본다(없으면 조용히 건너뜀)
-    if (summary && !confirm("AI 요약도 같이 Notion에 보낼까요?\n취소하면 주석만 보냅니다.")) {
-      summary = null;
-    }
+    const summary = collectSummaryForNotion();
     if (!items.length && !summary) return alert("내보낼 주석이나 요약이 없습니다.");
+
+    // 바로 저장하지 않고, 분류·요약을 고르는 패널을 먼저 띄운다(저장 후 Notion에서 분류 누르는 수고 제거).
+    const base = {
+      type: "notion-export",
+      parentId: notion_parent_id,
+      title: document.title || location.href,
+      url: location.href,
+      items,
+      hlCount,
+      rectCount,
+    };
+    showNotionPicker(base, summary, notion_parent_id);
+  }
+
+  // 내보내기 직전 패널 — Notion DB의 '분류' select 옵션을 실시간 조회해 버튼으로 보여준다.
+  function showNotionPicker(base, summary, parentId) {
+    showPanel("Notion 내보내기", "분류 불러오는 중…", false);
+    chrome.runtime.sendMessage({ type: "notion-categories", parentId }, (resp) => {
+      const cats = (resp && resp.ok && resp.categories) || [];
+      if (!cats.includes("미분류")) cats.unshift("미분류");
+      const warn = chrome.runtime.lastError
+        ? chrome.runtime.lastError.message
+        : resp && !resp.ok
+        ? resp.error
+        : null;
+      renderNotionPicker(base, summary, cats, warn);
+    });
+  }
+
+  // 패널은 호스트 페이지 DOM 안이라 사이트 CSS(button:hover/:focus 등)가 새어든다.
+  // 인라인 !important 로 못박아 어느 사이트에서도 선택 표시가 일관되게 보이도록 한다.
+  function chipCss(active) {
+    return (
+      "padding:5px 12px !important;border-radius:14px !important;cursor:pointer !important;" +
+      "font-size:13px !important;outline:none !important;box-shadow:none !important;" +
+      "border:1px solid " + (active ? "#e3573f" : "#ccc") + " !important;" +
+      "background:" + (active ? "#e3573f" : "#fff") + " !important;" +
+      "color:" + (active ? "#fff" : "#333") + " !important;"
+    );
+  }
+
+  function renderNotionPicker(base, summary, cats, warn) {
+    panelBody.style.whiteSpace = "normal";
+    panelBody.textContent = "";
+    let chosen = cats[0] || "미분류";
+
+    const label = document.createElement("div");
+    label.textContent = "분류 선택";
+    label.style.cssText = "font-weight:600 !important;margin:2px 0 8px !important;color:#333 !important";
+    panelBody.appendChild(label);
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px";
+    const btns = [];
+    const paint = () =>
+      btns.forEach((b) => (b.style.cssText = chipCss(b.dataset.cat === chosen)));
+    cats.forEach((name) => {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.dataset.cat = name;
+      b.addEventListener("click", () => {
+        chosen = name;
+        custom.value = "";
+        paint();
+      });
+      btns.push(b);
+      wrap.appendChild(b);
+    });
+    panelBody.appendChild(wrap);
+
+    const custom = document.createElement("input");
+    custom.type = "text";
+    custom.placeholder = "새 분류 직접 입력";
+    custom.style.cssText =
+      "width:100% !important;box-sizing:border-box !important;padding:6px !important;margin-bottom:10px !important;" +
+      "border:1px solid #ccc !important;border-radius:6px !important;background:#fff !important;color:#333 !important;" +
+      "font-size:13px !important;outline:none !important;box-shadow:none !important";
+    custom.addEventListener("input", () => {
+      chosen = custom.value.trim() || cats[0] || "미분류";
+      paint();
+    });
+    panelBody.appendChild(custom);
+
+    let includeSummary = true;
+    if (summary && summary.length) {
+      const row = document.createElement("label");
+      row.style.cssText =
+        "display:flex !important;align-items:center !important;gap:6px !important;margin-bottom:10px !important;cursor:pointer !important;color:#333 !important;font-size:13px !important";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = true;
+      cb.addEventListener("change", () => (includeSummary = cb.checked));
+      row.appendChild(cb);
+      row.appendChild(document.createTextNode("AI 요약도 함께 저장"));
+      panelBody.appendChild(row);
+    }
+
+    if (warn) {
+      const w = document.createElement("div");
+      w.textContent =
+        "분류 목록을 못 불러왔습니다 (" + warn + "). 직접 입력하거나 미분류로 저장됩니다.";
+      w.style.cssText = "color:#a33;font-size:12px;margin-bottom:8px";
+      panelBody.appendChild(w);
+    }
+
+    const save = document.createElement("button");
+    save.textContent = "Notion에 저장";
+    save.style.cssText =
+      "padding:7px 14px !important;background:#1a5fb4 !important;color:#fff !important;border:none !important;" +
+      "border-radius:6px !important;font-weight:600 !important;cursor:pointer !important;font-size:13px !important;" +
+      "outline:none !important;box-shadow:none !important";
+    save.addEventListener("click", () =>
+      sendNotionExport(base, chosen, includeSummary ? summary : null)
+    );
+    panelBody.appendChild(save);
+
+    paint();
+  }
+
+  function sendNotionExport(base, category, summary) {
     showPanel("Notion", "Notion에 저장 중…", false);
     chrome.runtime.sendMessage(
-      {
-        type: "notion-export",
-        parentId: notion_parent_id,
-        title: document.title || location.href,
-        url: location.href,
-        items,
-        summary,
-        hlCount,
-        rectCount,
-      },
+      Object.assign({}, base, { category, summary }),
       (resp) => {
         if (chrome.runtime.lastError)
           return showPanel("Notion", "오류: " + chrome.runtime.lastError.message, false);

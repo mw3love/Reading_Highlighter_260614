@@ -239,12 +239,25 @@ async function notionGetOrCreateDatabase(parentId) {
   );
 }
 
+// 분류(select) 후보 조회 — 데이터소스 스키마의 '분류' select 옵션 이름 목록.
+// 내보내기 직전 패널에서 이 목록을 버튼으로 보여줘 사용자가 그 자리에서 분류를 고른다.
+async function notionGetCategories(parentId) {
+  const dataSourceId = await notionGetOrCreateDatabase(parentId);
+  const ds = await notionFetch("/data_sources/" + dataSourceId, {
+    headers: await notionHeaders(),
+  });
+  const prop = ds.properties && ds.properties["분류"];
+  const opts = (prop && prop.select && prop.select.options) || [];
+  return opts.map((o) => o.name);
+}
+
 // 행 속성 — notionDbSchema 의 키와 정확히 일치해야 함.
+// 분류는 내보내기 시 사용자가 고른 값(없으면 미분류). 기존에 없는 이름이면 Notion 이 옵션을 자동 생성한다.
 function notionRowProps(spec) {
   const props = {
     제목: { title: notionRich(spec.title || "Untitled") },
     저장일: { date: { start: new Date().toISOString() } },
-    분류: { select: { name: "미분류" } },
+    분류: { select: { name: (spec.category && spec.category.trim()) || "미분류" } },
     하이라이트: { number: spec.hlCount || 0 },
     네모: { number: spec.rectCount || 0 },
     요약포함: { checkbox: !!(spec.summary && spec.summary.length) },
@@ -353,6 +366,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "notion-connect") {
     notionConnect(msg.parentId)
       .then((r) => sendResponse({ ok: true, title: r.title, db: r.db }))
+      .catch((e) => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
+  // 콘텐츠 스크립트: 내보내기 직전 분류(select) 후보 목록 조회
+  if (msg.type === "notion-categories") {
+    notionGetCategories(msg.parentId)
+      .then((categories) => sendResponse({ ok: true, categories }))
       .catch((e) => sendResponse({ ok: false, error: e.message }));
     return true;
   }
