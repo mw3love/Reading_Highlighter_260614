@@ -13,19 +13,27 @@
 - **스크롤 체이닝 방지**: `.ca-panel-body`·`.ca-note-composer`에 `overscroll-behavior: contain`(끝까지 스크롤해도 페이지 안 밀림).
 - 사용자 확인: 스크롤·클릭후스페이스·체이닝 모두 OK. 매니페스트 0.6.1.
 
-### (2) 네모 모드 유튜브 컨트롤 클릭 — **방법 A 구현·검증됨(0.6.2). 다음: 방법 B 하이브리드로 교체 예정(미세 깜빡임 제거)**
+### (2) 네모 모드 유튜브 컨트롤 클릭 — **방법 B 하이브리드 구현·실조건 검증 완료 (0.6.3)**
 
-**현 상태(0.6.2, 커밋됨 — `content.js`):** 방법 A + 재생상태 사후복원. 사용자 실유튜브 테스트 완료: seek·버튼·드래그캡처·기사캡처·클릭후스페이스 **모두 OK**. 정지영상 드래그 재생 회귀도 `restorePlayback`으로 잡음. **남은 결함 1개**: 클릭→드래그→뗌 과정에서 **미세하게 1프레임 재생 깜빡임**(소리 틱 + 영상 미세 이동).
+**현 상태(0.6.3 — `content.js`):** 방법 A를 **방법 B 하이브리드로 교체 완료**. 0.6.2의 미세 깜빡임 결함 **해소**. 사용자 실유튜브 테스트 6항목 **모두 OK**(seek·버튼·본문클릭토글·클릭후스페이스·본문드래그캡처(깜빡임0)·기사캡처). 특히 **하단 자막 구간 드래그 캡처도 깜빡임 없이 동작 확인**.
 
-**왜 못 없애나(구조적 한계):** 방법 A는 클릭 통과를 위해 press(pointerdown/mousedown)를 유튜브로 흘린다 → 유튜브가 그 press로 **한 프레임 재생한 뒤** `restorePlayback`이 되돌리는 순서. 같은 이벤트를 "드래그인지 확인 후" 사후에 막을 수 없으므로(동기 전파) ≥1프레임 재생은 불가피. 복원을 당겨도 0프레임 안 됨.
+**방법 B 동작(구현됨):**
+- **영상 본문(play-surface) press를 캡처 단계에서 차단** → 유튜브가 재생을 시작할 일이 없어 드래그 캡처 시 **깜빡임 0**.
+- **컨트롤(재생바·버튼)만 네이티브로 통과** → seek·버튼 유지. 구분: `swallowPointer`의 pointerdown에서 `videoUnderPoint`로 영상 위인지 본 뒤 `e.target.closest(VIDEO_CONTROL_SEL)` 매칭이면 컨트롤(통과), 아니면 본문(차단).
+- `VIDEO_CONTROL_SEL`(content.js 내 상수): `.ytp-chrome-bottom, .ytp-chrome-top, .ytp-chrome-controls, .ytp-progress-bar-container, .ytp-progress-bar, .ytp-gradient-bottom, .ytp-gradient-top, button, a, [role='slider'], [role='button'], input[type='range']`.
+- 본문 단순 클릭 → **우리가 직접 play/pause 토글 + `video.focus()`**(스페이스는 mousedown의 입력칸 blur로 영상에 전달). 본문 드래그 → 캡처.
+- 상태 변수: `overControlAtDown`(컨트롤서 시작=통과), `videoBodyAtDown`(본문 클릭 토글 대상). 방법 A의 `overVideoAtDown`/`pausedAtDown`/`dragConfirmed`/`DRAG_THRESHOLD`/`restorePlayback` **전부 제거**.
 
-**다음 세션 작업 — 방법 B 하이브리드(사용자 승인됨):**
-- 핵심: **영상 본문(play-surface) press는 아예 차단**(유튜브가 재생 시작할 일 없음 → 깜빡임 0). **컨트롤(재생바·버튼)만 네이티브로 통과**시켜 seek·버튼 유지.
-- 본문 vs 컨트롤 구분은 `swallowPointer`의 `e.target`으로(pointerdown 시점 실제 타깃). 컨트롤 셀렉터 예: `.ytp-chrome-bottom, .ytp-chrome-top, .ytp-progress-bar-container, .ytp-progress-bar, .ytp-gradient-bottom, .ytp-chrome-controls, button, a, [role="slider"], [role="button"]` → `e.target.closest(...)` 매칭되면 **통과**(캡처·수동토글 안 함), 아니면 **본문**으로 보고 차단.
-- 본문 처리: 단순 클릭 → **우리가 직접 play/pause 토글 + `video.focus()`**(0.6.1 방식 복귀, `restorePlayback`/`pausedAtDown` 불필요해짐 → 제거). 드래그 → 기존대로 캡처(press 차단했으니 재생 안 됨, 깜빡임 0).
-- 비용/리스크: **유튜브 DOM 클래스 의존**(유튜브 구조 변경 시 셀렉터 보수). 컨트롤바 위 캡처는 불가(보통 불필요). 비유튜브 네이티브 컨트롤 영상은 seek 안 될 수 있음(본문 취급). → 0프레임 + seek 동시 유지엔 본문/컨트롤 구분이 필수이고 그 구분은 셀렉터 외 방법 없음(셀렉터 없이 0프레임 = seek 포기).
-- 교체 시 정리 대상: 현 A의 `overVideoAtDown` 미확정-통과 로직, `pausedAtDown`/`restorePlayback`, `DRAG_THRESHOLD` 기반 지연확정 — B에선 press를 바로 차단하므로 단순화됨. `videoUnderPoint`는 본문 판정에 재사용 가능.
-- 후퇴 옵션: 방법 C(클릭 통과 포기, 깜빡임·셀렉터 의존 모두 없으나 seek 불가 — 애초 문제로 회귀).
+**알려진 한계/유지보수 포인트(셀렉터 의존):**
+- **유튜브 DOM 클래스 의존** — 유튜브가 클래스명 바꾸면 `VIDEO_CONTROL_SEL` 보수 필요(seek·버튼·커서 모두 이 셀렉터에 묶임).
+- 컨트롤바 위 캡처는 불가(통과되므로, 보통 불필요). 비유튜브 네이티브 컨트롤 영상은 컨트롤이 셀렉터에 안 잡혀 본문 취급될 수 있음(seek 대신 캡처/토글).
+- self-review에서 "셀렉터가 넓어 하단 그라디언트 구간 캡처가 깨질 수 있다"는 우려 제기됐으나, **실테스트 결과 하단 자막 드래그 캡처 정상** → 현 넓은 셀렉터 유지. 추후 캡처 실패 보고 시 컨테이너/그라디언트(`.ytp-chrome-bottom`·`.ytp-gradient-*`) 빼고 인터랙티브 요소만 남기는 narrowing 옵션 있음.
+
+### (3) 형광펜 추가 시 패널 자동 스크롤 (0.6.3) — `content.js`
+네모는 새 캡처 시 `scrollPanelTo`로 패널이 해당 항목으로 스크롤됐지만 형광펜은 누락돼 있었음 → `highlightSelection`이 마지막으로 감싼 형광펜 id로 `scrollPanelTo` 호출하도록 추가. `wrapTextNode`가 감싼 id를 반환하게 바꿔 마지막 항목 추적. 여러 줄 선택 시 선택 끝 항목으로 스크롤. 사용자 실조건 확인 OK.
+
+### (보류) 네모 모드 컨트롤 위 커서 모양
+영상 컨트롤 위에선 십자가(`.ca-rect-cursor *{cursor:crosshair!important}`) 대신 네이티브 커서가 맞으나, 구현하려면 매 mousemove마다 `VIDEO_CONTROL_SEL`로 hit-test해야 함 → 이미 brittle한 셀렉터에 커서 로직까지 결합. 순수 외형 개선이고 클릭은 정상 작동하므로 **보류**(가치 < 비용). 추후 유튜브 셀렉터 손볼 일 생기면 그때 함께.
 
 ## 0. 직전 작업: 노트·캡션·영상 캡처 (0.6.0) — 푸쉬됨(884a709)
 

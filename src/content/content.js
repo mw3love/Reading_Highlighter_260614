@@ -719,15 +719,18 @@
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     // 선택 영역에 걸친 텍스트 노드들을 각각 감싼다 (여러 태그 걸쳐도 동작)
+    let lastId = null;
     getSelectedTextNodes(range).forEach((node) => {
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
       if (start >= end) return;
-      wrapTextNode(node, start, end);
+      const id = wrapTextNode(node, start, end);
+      if (id) lastId = id;
     });
     sel.removeAllRanges();
     refreshAnnotationsPanel();
     revealOnFirstAnnotation();
+    if (lastId) scrollPanelTo(lastId); // 방금 친 형광펜 항목이 패널에 보이도록(네모와 동일 동작)
   }
 
   function getSelectedTextNodes(range) {
@@ -761,8 +764,10 @@
     try {
       r.surroundContents(span); // 단일 텍스트노드 범위라 항상 성공
       annotations.push({ type: "highlight", id: span.dataset.caId, text: span.textContent });
+      return span.dataset.caId;
     } catch (_) {
       /* 드물게 실패하면 그 노드만 건너뜀 */
+      return null;
     }
   }
 
@@ -770,46 +775,33 @@
   let dragStart = null;
   let dragEl = null;
   let suppressClick = false; // 드래그 직후 따라오는 click 1회 무효화 플래그
-  // 방법 A(영상 위 클릭 통과): 영상 위에서 시작한 제스처는 이동이 임계값을 넘어 '드래그(캡처)'로
-  // 확정되기 전까지 유튜브로 통과시켜 재생바 seek·버튼·재생토글이 동작하게 한다. 비영상(기사 등)은
-  // 기존대로 즉시 억제. overVideoAtDown=pointerdown 시점의 영상 히트(또는 null), dragConfirmed=드래그 확정.
-  let overVideoAtDown = null;
-  let pausedAtDown = null; // pointerdown 시점 영상의 paused 상태 — 드래그 확정 시 이 상태로 복원
-  let dragConfirmed = false;
-  const DRAG_THRESHOLD = 8; // px — 이 이상 움직여야 캡처 드래그로 확정(=최소 캡처 크기와 일치). 그 전엔 클릭.
+  // 방법 B(하이브리드): 영상 위라도 컨트롤(재생바·버튼)에서 시작한 제스처만 유튜브로 통과시켜
+  // seek·버튼이 동작하게 하고, 영상 본문(play-surface)에서 시작한 press 는 아예 차단한다 →
+  // 유튜브가 재생을 시작할 일이 없어 드래그 캡처 시 재생 깜빡임 0. 본문 단순 클릭은 우리가 직접
+  // play/pause 를 토글한다. 비영상(기사 등)은 기존대로 즉시 억제.
+  let overControlAtDown = false; // pointerdown 이 영상 컨트롤 위 → 네이티브 통과(캡처 안 함)
+  let videoBodyAtDown = null; // pointerdown 이 영상 본문 위면 그 video (단순 클릭 시 토글 대상)
 
-  // 방법 A 부작용 보정: 영상 위 드래그는 press(pointerdown/mousedown)를 유튜브로 통과시키므로
-  // 유튜브가 그 press 로 재생/정지를 토글할 수 있다. 드래그는 재생상태를 바꾸면 안 되므로,
-  // 무엇이 토글했든 pointerdown 시점 상태(paused)로 되돌린다. (단순 클릭에서는 호출하지 않음 → 토글 유지)
-  function restorePlayback(v, paused) {
-    if (!v || paused == null) return;
-    try {
-      if (paused && !v.paused) v.pause();
-      else if (!paused && v.paused) {
-        const p = v.play();
-        if (p && p.catch) p.catch(() => {});
-      }
-    } catch (_) {}
-  }
+  // 영상 플레이어 컨트롤 셀렉터 — 여기서 시작한 제스처는 통과시켜 seek·버튼을 유지.
+  // (유튜브 DOM 클래스 의존 — 유튜브 구조 변경 시 이 셀렉터 보수 필요.) 그 외 영상 영역은 '본문'.
+  const VIDEO_CONTROL_SEL =
+    ".ytp-chrome-bottom, .ytp-chrome-top, .ytp-chrome-controls, .ytp-progress-bar-container, " +
+    ".ytp-progress-bar, .ytp-gradient-bottom, .ytp-gradient-top, button, a, " +
+    "[role='slider'], [role='button'], input[type='range']";
 
   // 네모 모드의 드래그 제스처가 페이지(예: 유튜브 영상의 클릭=재생토글)에 닿지 않도록
   // 포인터 다운/업을 캡처 단계에서 가로채 페이지로의 전파를 끊는다. (우리 mouse 핸들러는 그대로 동작)
-  // 단, 방법 A: 영상 위에서 시작한 제스처는 '드래그 확정' 전(=단순 클릭)엔 통과시켜 유튜브가 처리.
+  // 단, 방법 B: 영상 '컨트롤'에서 시작한 제스처만 통과시켜 유튜브가 처리(본문 press 는 차단).
   const swallowPointer = (e) => {
     if (mode !== "rect" || isUI(e.target)) return;
     if (e.type === "pointerdown") {
-      overVideoAtDown = videoUnderPoint(e.clientX, e.clientY); // 영상(컨트롤 포함) 위에서 시작했나
-      pausedAtDown = overVideoAtDown ? overVideoAtDown.v.paused : null; // 드래그 확정 시 복원할 기준
-      dragConfirmed = !overVideoAtDown; // 비영상=즉시 확정(억제), 영상=클릭/드래그 구분 대기
+      const vid = videoUnderPoint(e.clientX, e.clientY); // 영상(컨트롤 포함) 위에서 시작했나
+      const onControl = vid && e.target.closest && e.target.closest(VIDEO_CONTROL_SEL);
+      overControlAtDown = !!onControl;
+      videoBodyAtDown = vid && !onControl ? vid.v : null;
     }
-    if (e.type === "pointermove") {
-      // pointermove 는 '영상 위 확정 드래그' 동안에만 차단(유튜브 재생바 스크럽 취소). 그 외엔 관여 안 함.
-      if (overVideoAtDown && dragConfirmed) e.stopImmediatePropagation();
-      return;
-    }
-    // 영상 위 단순 클릭(드래그 미확정)은 통과 → 유튜브가 seek/버튼/재생 처리.
-    if (overVideoAtDown && !dragConfirmed) return;
-    e.stopImmediatePropagation(); // 그 외(비영상, 또는 확정된 드래그의 pointerup)는 사이트로 전파 차단
+    if (overControlAtDown) return; // 컨트롤: 모든 포인터 이벤트 통과 → 유튜브가 seek/버튼 처리.
+    e.stopImmediatePropagation(); // 그 외(영상 본문·비영상)는 사이트로 전파 차단.
   };
   document.addEventListener("pointerdown", swallowPointer, true);
   document.addEventListener("pointermove", swallowPointer, true);
@@ -844,17 +836,17 @@
   );
 
   // 캡처 단계 + stopPropagation 으로 페이지보다 먼저 잡아 드래그 제스처를 사이트에서 격리한다.
-  // 방법 A: 영상 위에서 시작했으면 여기서 막지 않고 통과시킨다(클릭=유튜브 처리). 이동이 임계값을
-  // 넘으면 mousemove 에서 드래그로 확정하며 그때 박스를 만든다. 비영상은 기존대로 즉시 박스 시작.
+  // 방법 B: 영상 '컨트롤'에서 시작했으면 통과(유튜브가 seek/버튼 처리, 캡처 안 함). 영상 본문·비영상은
+  // 기존대로 즉시 박스 시작(press 차단 → 본문 클릭/드래그로 유튜브가 재생할 일 없음).
   document.addEventListener(
     "mousedown",
     (e) => {
       if (mode !== "rect" || e.button !== 0 || isUI(e.target)) return;
+      if (overControlAtDown) return; // 컨트롤: 유튜브가 처리(통과).
       // 새 캡처/클릭 시작 시 우리 입력칸(캡션·노트) 포커스를 해제 → 스페이스 등 키가 영상으로 넘어가게.
       const ae = document.activeElement;
       if (ae && ae.isContentEditable && isUI(ae)) ae.blur();
       dragStart = { x: e.pageX, y: e.pageY };
-      if (overVideoAtDown) return; // 영상 위: 통과(클릭 후보). 박스/억제는 드래그 확정 시 mousemove 에서.
       e.preventDefault();
       e.stopImmediatePropagation();
       dragEl = document.createElement("div");
@@ -866,34 +858,39 @@
   );
 
   document.addEventListener("mousemove", (e) => {
-    // 방법 A: 영상 위에서 시작했고 아직 미확정이면, 이동량이 임계값을 넘는 순간 드래그(캡처)로 확정.
-    if (overVideoAtDown && !dragConfirmed && dragStart && mode === "rect") {
-      if (Math.hypot(e.pageX - dragStart.x, e.pageY - dragStart.y) >= DRAG_THRESHOLD) {
-        dragConfirmed = true; // 이후 swallowPointer 가 유튜브로의 전파(이동·업·클릭)를 차단
-        restorePlayback(overVideoAtDown.v, pausedAtDown); // 새어든 press 의 재생토글 즉시 되돌림(깜빡임 최소화)
-        dragEl = document.createElement("div");
-        dragEl.className = "ca-rect";
-        document.documentElement.appendChild(dragEl);
-      }
-    }
     if (dragEl) drawRect(e);
   });
 
   document.addEventListener(
     "mouseup",
     (e) => {
-    if (!dragEl) {
-      // 영상 위 단순 클릭(드래그 미확정) — 유튜브가 press/click 으로 seek/버튼/재생 처리(복원 안 함). 상태만 정리.
+    if (overControlAtDown) {
+      // 컨트롤 위 제스처 — 유튜브가 seek/버튼 처리. 상태만 정리.
       dragStart = null;
-      overVideoAtDown = null;
-      pausedAtDown = null;
-      dragConfirmed = false;
+      videoBodyAtDown = null;
+      return;
+    }
+    if (!dragEl) {
+      dragStart = null;
+      videoBodyAtDown = null;
       return;
     }
     e.stopImmediatePropagation();
     const box = boxOf(e);
     if (box.w < 8 || box.h < 8) {
-      dragEl.remove(); // 너무 작으면 취소(=단순 클릭). 영상 위 클릭/재생토글은 유튜브 네이티브가 처리.
+      dragEl.remove(); // 너무 작으면 취소(=단순 클릭).
+      // 영상 본문 단순 클릭 → 우리가 직접 재생/정지 토글 + 영상 포커스(스페이스 등이 영상으로 가게).
+      // press 를 차단했으므로 유튜브는 토글하지 않음 → 우리 토글 1회만, 깜빡임 0.
+      if (videoBodyAtDown) {
+        const v = videoBodyAtDown;
+        try {
+          if (v.paused) {
+            const p = v.play();
+            if (p && p.catch) p.catch(() => {});
+          } else v.pause();
+          v.focus({ preventScroll: true });
+        } catch (_) {}
+      }
     } else {
       const id = uid();
       const vid = videoUnder(box); // 영상 위면 시간축 캡처로 전환
@@ -930,14 +927,7 @@
     }
     dragEl = null;
     dragStart = null;
-    // 방법 A 백업 복원: 늦게 반영된 재생토글까지 잡도록 지금 + 다음 틱에 한 번 더 pointerdown 상태로 되돌림.
-    const vDown = overVideoAtDown && overVideoAtDown.v;
-    const pDown = pausedAtDown;
-    restorePlayback(vDown, pDown);
-    setTimeout(() => restorePlayback(vDown, pDown), 0);
-    overVideoAtDown = null;
-    pausedAtDown = null;
-    dragConfirmed = false;
+    videoBodyAtDown = null;
     // 드래그가 끝나면 브라우저가 click 을 한 번 더 쏜다 → 이미지/링크 팝업 방지로 1회 무효화
     suppressClick = true;
     setTimeout(() => (suppressClick = false), 0);
