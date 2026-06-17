@@ -770,14 +770,33 @@
   let dragStart = null;
   let dragEl = null;
   let suppressClick = false; // 드래그 직후 따라오는 click 1회 무효화 플래그
+  // 방법 A(영상 위 클릭 통과): 영상 위에서 시작한 제스처는 이동이 임계값을 넘어 '드래그(캡처)'로
+  // 확정되기 전까지 유튜브로 통과시켜 재생바 seek·버튼·재생토글이 동작하게 한다. 비영상(기사 등)은
+  // 기존대로 즉시 억제. overVideoAtDown=pointerdown 시점의 영상 히트(또는 null), dragConfirmed=드래그 확정.
+  let overVideoAtDown = null;
+  let dragConfirmed = false;
+  const DRAG_THRESHOLD = 8; // px — 이 이상 움직여야 캡처 드래그로 확정(=최소 캡처 크기와 일치). 그 전엔 클릭.
 
   // 네모 모드의 드래그 제스처가 페이지(예: 유튜브 영상의 클릭=재생토글)에 닿지 않도록
   // 포인터 다운/업을 캡처 단계에서 가로채 페이지로의 전파를 끊는다. (우리 mouse 핸들러는 그대로 동작)
+  // 단, 방법 A: 영상 위에서 시작한 제스처는 '드래그 확정' 전(=단순 클릭)엔 통과시켜 유튜브가 처리.
   const swallowPointer = (e) => {
     if (mode !== "rect" || isUI(e.target)) return;
-    e.stopImmediatePropagation(); // 사이트가 먼저 등록한 캡처 리스너(예: 유튜브)까지 차단
+    if (e.type === "pointerdown") {
+      overVideoAtDown = videoUnderPoint(e.clientX, e.clientY); // 영상(컨트롤 포함) 위에서 시작했나
+      dragConfirmed = !overVideoAtDown; // 비영상=즉시 확정(억제), 영상=클릭/드래그 구분 대기
+    }
+    if (e.type === "pointermove") {
+      // pointermove 는 '영상 위 확정 드래그' 동안에만 차단(유튜브 재생바 스크럽 취소). 그 외엔 관여 안 함.
+      if (overVideoAtDown && dragConfirmed) e.stopImmediatePropagation();
+      return;
+    }
+    // 영상 위 단순 클릭(드래그 미확정)은 통과 → 유튜브가 seek/버튼/재생 처리.
+    if (overVideoAtDown && !dragConfirmed) return;
+    e.stopImmediatePropagation(); // 그 외(비영상, 또는 확정된 드래그의 pointerup)는 사이트로 전파 차단
   };
   document.addEventListener("pointerdown", swallowPointer, true);
+  document.addEventListener("pointermove", swallowPointer, true);
   document.addEventListener("pointerup", swallowPointer, true);
 
   // 노트·캡션 등 우리 UI 입력칸에서 타이핑할 때 키 이벤트가 페이지로 새어 사이트 단축키
@@ -809,6 +828,8 @@
   );
 
   // 캡처 단계 + stopPropagation 으로 페이지보다 먼저 잡아 드래그 제스처를 사이트에서 격리한다.
+  // 방법 A: 영상 위에서 시작했으면 여기서 막지 않고 통과시킨다(클릭=유튜브 처리). 이동이 임계값을
+  // 넘으면 mousemove 에서 드래그로 확정하며 그때 박스를 만든다. 비영상은 기존대로 즉시 박스 시작.
   document.addEventListener(
     "mousedown",
     (e) => {
@@ -816,9 +837,10 @@
       // 새 캡처/클릭 시작 시 우리 입력칸(캡션·노트) 포커스를 해제 → 스페이스 등 키가 영상으로 넘어가게.
       const ae = document.activeElement;
       if (ae && ae.isContentEditable && isUI(ae)) ae.blur();
+      dragStart = { x: e.pageX, y: e.pageY };
+      if (overVideoAtDown) return; // 영상 위: 통과(클릭 후보). 박스/억제는 드래그 확정 시 mousemove 에서.
       e.preventDefault();
       e.stopImmediatePropagation();
-      dragStart = { x: e.pageX, y: e.pageY };
       dragEl = document.createElement("div");
       dragEl.className = "ca-rect";
       document.documentElement.appendChild(dragEl);
@@ -828,31 +850,32 @@
   );
 
   document.addEventListener("mousemove", (e) => {
+    // 방법 A: 영상 위에서 시작했고 아직 미확정이면, 이동량이 임계값을 넘는 순간 드래그(캡처)로 확정.
+    if (overVideoAtDown && !dragConfirmed && dragStart && mode === "rect") {
+      if (Math.hypot(e.pageX - dragStart.x, e.pageY - dragStart.y) >= DRAG_THRESHOLD) {
+        dragConfirmed = true; // 이후 swallowPointer 가 유튜브로의 전파(이동·업·클릭)를 차단
+        dragEl = document.createElement("div");
+        dragEl.className = "ca-rect";
+        document.documentElement.appendChild(dragEl);
+      }
+    }
     if (dragEl) drawRect(e);
   });
 
   document.addEventListener(
     "mouseup",
     (e) => {
-    if (!dragEl) return;
+    if (!dragEl) {
+      // 영상 위 단순 클릭(드래그 미확정) — 유튜브가 click 으로 seek/버튼/재생 처리. 제스처 상태만 정리.
+      dragStart = null;
+      overVideoAtDown = null;
+      dragConfirmed = false;
+      return;
+    }
     e.stopImmediatePropagation();
     const box = boxOf(e);
     if (box.w < 8 || box.h < 8) {
-      dragEl.remove(); // 너무 작으면 취소(=단순 클릭)
-      // 영상 위 단순 클릭(드래그 아님) → 재생/일시정지 토글 + 영상에 포커스(이후 스페이스도 영상으로).
-      // 캡처는 드래그로만 하므로 클릭은 영상 조작에 양보한다.
-      const vc = videoUnder(box);
-      if (vc) {
-        try {
-          if (vc.v.paused) {
-            const p = vc.v.play();
-            if (p && p.catch) p.catch(() => {});
-          } else {
-            vc.v.pause();
-          }
-          vc.v.focus();
-        } catch (_) {}
-      }
+      dragEl.remove(); // 너무 작으면 취소(=단순 클릭). 영상 위 클릭/재생토글은 유튜브 네이티브가 처리.
     } else {
       const id = uid();
       const vid = videoUnder(box); // 영상 위면 시간축 캡처로 전환
@@ -889,6 +912,8 @@
     }
     dragEl = null;
     dragStart = null;
+    overVideoAtDown = null;
+    dragConfirmed = false;
     // 드래그가 끝나면 브라우저가 click 을 한 번 더 쏜다 → 이미지/링크 팝업 방지로 1회 무효화
     suppressClick = true;
     setTimeout(() => (suppressClick = false), 0);
@@ -917,10 +942,8 @@
     };
   }
 
-  // 박스 중심이 <video> 위에 있으면 그 영상과 인덱스를 돌려준다(없으면 null). 페이지좌표→뷰포트좌표 변환.
-  function videoUnder(box) {
-    const cx = box.x - window.scrollX + box.w / 2;
-    const cy = box.y - window.scrollY + box.h / 2;
+  // 뷰포트 좌표 (cx,cy) 가 어떤 <video> 위에 있으면 그 영상과 인덱스를 돌려준다(없으면 null).
+  function videoUnderPoint(cx, cy) {
     const vids = Array.from(document.querySelectorAll("video"));
     for (let i = 0; i < vids.length; i++) {
       const r = vids[i].getBoundingClientRect();
@@ -928,6 +951,10 @@
         return { v: vids[i], idx: i };
     }
     return null;
+  }
+  // 박스 중심이 <video> 위에 있으면 그 영상과 인덱스를 돌려준다(없으면 null). 페이지좌표→뷰포트좌표 변환.
+  function videoUnder(box) {
+    return videoUnderPoint(box.x - window.scrollX + box.w / 2, box.y - window.scrollY + box.h / 2);
   }
 
   // 초 → mm:ss (1시간 이상이면 h:mm:ss)
