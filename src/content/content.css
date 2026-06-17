@@ -359,6 +359,7 @@ html.ca-ext-off .ca-hl {
 .ca-panel-body {
   padding: 12px 14px;
   overflow-y: auto;
+  overscroll-behavior: contain; /* 끝까지 스크롤해도 페이지로 전파(스크롤 체이닝) 안 함 */
   font-size: 14px;
   line-height: 1.6;
   color: #222;
@@ -503,6 +504,7 @@ html.ca-ext-off .ca-hl {
   padding: 8px 10px;
   max-height: 120px;
   overflow-y: auto;
+  overscroll-behavior: contain; /* 입력창 스크롤도 페이지로 전파 안 함 */
   border: 1px solid #d0d3d9;
   border-radius: 6px;
   background: #fff;

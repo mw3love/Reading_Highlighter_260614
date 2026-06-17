@@ -813,6 +813,9 @@
     "mousedown",
     (e) => {
       if (mode !== "rect" || e.button !== 0 || isUI(e.target)) return;
+      // 새 캡처/클릭 시작 시 우리 입력칸(캡션·노트) 포커스를 해제 → 스페이스 등 키가 영상으로 넘어가게.
+      const ae = document.activeElement;
+      if (ae && ae.isContentEditable && isUI(ae)) ae.blur();
       e.preventDefault();
       e.stopImmediatePropagation();
       dragStart = { x: e.pageX, y: e.pageY };
@@ -835,7 +838,21 @@
     e.stopImmediatePropagation();
     const box = boxOf(e);
     if (box.w < 8 || box.h < 8) {
-      dragEl.remove(); // 너무 작으면 취소
+      dragEl.remove(); // 너무 작으면 취소(=단순 클릭)
+      // 영상 위 단순 클릭(드래그 아님) → 재생/일시정지 토글 + 영상에 포커스(이후 스페이스도 영상으로).
+      // 캡처는 드래그로만 하므로 클릭은 영상 조작에 양보한다.
+      const vc = videoUnder(box);
+      if (vc) {
+        try {
+          if (vc.v.paused) {
+            const p = vc.v.play();
+            if (p && p.catch) p.catch(() => {});
+          } else {
+            vc.v.pause();
+          }
+          vc.v.focus();
+        } catch (_) {}
+      }
     } else {
       const id = uid();
       const vid = videoUnder(box); // 영상 위면 시간축 캡처로 전환
@@ -855,6 +872,7 @@
       annotations.push(ann);
       refreshAnnotationsPanel(); // 네모 추가 즉시 반영(이미지는 캡처 후 한 번 더)
       revealOnFirstAnnotation();
+      scrollPanelTo(id); // 방금 추가한 항목으로 패널 스크롤(확인 + 바로 캡션 입력)
       const boxEl = dragEl; // 캡처 후 정리에 쓰려고 참조 보관
       // 그린 영역을 즉시(조용히) 캡처해 주석에 저장 (저장 버튼/AI에서 재사용)
       captureRegion(box)
@@ -862,6 +880,7 @@
           ann.image = dataUrl;
           if (vid) boxEl.remove(); // 영상: 캡처 끝나면 박스 제거(시청 방해·다음 캡처 혼동 방지)
           refreshAnnotationsPanel();
+          scrollPanelTo(id); // 이미지·캡션칸이 생긴 뒤 다시 스크롤(캡션이 보이도록)
         })
         .catch((err) => {
           if (vid) boxEl.remove();
@@ -1356,8 +1375,30 @@
     const order = collectSorted();
     const lastId = order.length ? order[order.length - 1].id : "";
     const idx = lastId ? annotations.findIndex((a) => a.id === lastId) : -1;
-    annotations.splice(idx + 1, 0, { type: "note", id: uid(), text, afterId: anchorFor(lastId) });
+    const id = uid();
+    annotations.splice(idx + 1, 0, { type: "note", id, text, afterId: anchorFor(lastId) });
     renderAnnotationsBody();
+    scrollPanelTo(id); // 방금 추가한 노트로 스크롤(입력창 포커스는 유지)
+  }
+
+  // 주석 정리 패널을 특정 항목(id)으로 스크롤 — 캡션칸 우선(바로 입력), 없으면 항목 전체.
+  // scrollIntoView 는 문서 루트까지 스크롤할 수 있어(유튜브 페이지 점프 위험) panelBody 만 좌표로 직접 스크롤.
+  function scrollPanelTo(id) {
+    if (panel.style.display === "none" || panelKind !== "annotations") return;
+    const del = panelBody.querySelector('[data-ca-del="' + id + '"]');
+    const item = del && del.closest(".ca-anno-item");
+    if (!item) return;
+    const doScroll = () => {
+      const target = item.querySelector("[data-cap-edit]") || item; // 캡션칸 우선(바로 입력)
+      const ir = target.getBoundingClientRect();
+      const pr = panelBody.getBoundingClientRect();
+      if (ir.bottom > pr.bottom) panelBody.scrollTop += ir.bottom - pr.bottom + 8;
+      else if (ir.top < pr.top) panelBody.scrollTop -= pr.top - ir.top + 8;
+    };
+    doScroll();
+    // 캡처 이미지가 아직 디코드 전이면 높이가 0이라 덜 내려감 → 로드되면(높이 확정) 한 번 더.
+    const img = item.querySelector("img");
+    if (img && !img.complete) img.addEventListener("load", doScroll, { once: true });
   }
 
   // 노트 한 칸 이동(▲ dir=-1 / ▼ dir=+1). 표시 순서에서 이웃과 자리를 바꾼 뒤, 각 노트의 앵커를
