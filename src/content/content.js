@@ -614,6 +614,7 @@
       panel.style.display = "flex";
       applyPanelPos();
       panelHiddenByBar = false;
+      refreshAnnotationsPanel(); // 숨겨진 동안 추가된 주석을 복원 즉시 반영(내부 가드: 정리탭+표시 중에만)
     }
   }
 
@@ -705,6 +706,7 @@
       applyMode(null); // 그리기 모드·커서 해제(끈 상태에선 새 주석도 안 그려지게)
     } else {
       panel.style.display = panelDisplayBeforeHide;
+      refreshAnnotationsPanel(); // 숨김 해제 시에도 그동안의 주석 변경 반영(내부 가드로 안전)
     }
   });
 
