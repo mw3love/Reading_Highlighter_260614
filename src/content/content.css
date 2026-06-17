@@ -84,6 +84,15 @@ html.ca-ext-off .ca-hl {
   color: #c0392b;
   font-weight: 600;
 }
+/* Notion = 최종 저장(주 액션) — 도구 3개(고스트)와 달리 코랄 solid fill 로 위계 차별화 */
+.ca-toolbar button[data-act="notion"] {
+  background: #c0392b;
+  color: #fff;
+  font-weight: 600;
+}
+.ca-toolbar button[data-act="notion"]:hover {
+  background: #a93226;
+}
 /* 도구 그룹 구분선 (형광펜·네모 | 정리·AI | Notion) */
 .ca-sep {
   width: 1px;
