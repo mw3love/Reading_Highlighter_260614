@@ -668,6 +668,10 @@
         toggleBar(); // 백틱: 도구막대(+패널) 접기/펼치기
         if (!backtickUsed && wasCollapsed) activateHighlight(); // 처음 펼칠 때만 형광펜 ON
         backtickUsed = true;
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        const v = pickVideoForShortcut(); // 마우스 밑 영상 → 없으면 화면 최대 영상
+        if (v) triggerVideoCapture(v);
       } else if (e.key === "Escape" && mode) {
         applyMode(null);
       }
@@ -865,6 +869,7 @@
   );
 
   document.addEventListener("mousemove", (e) => {
+    lastMouse = { x: e.clientX, y: e.clientY }; // F4 단축키가 '마우스 밑 영상'을 찾을 때 사용
     if (dragEl) drawRect(e);
     else updateMagnet(e); // 드래그 중이 아니면 영상 위 자석 강조 갱신
   });
@@ -937,6 +942,7 @@
   // 클릭 = 영상 전체 1장 캡처(영상 본문 클릭은 재생/정지). 버튼은 드래그로 이동 가능하고 위치는 저장된다.
   let magnetEl = null;
   let magnetVideo = null; // 현재 자석이 가리키는 {v, idx}
+  let lastMouse = null; // 마지막 마우스 뷰포트 좌표 — F4 단축키가 '마우스 밑 영상'을 찾는 데 사용
   let captureBtn = null; // 자석 위 📷 캡처 버튼(처음 필요할 때 생성)
   let captureBtnDragging = false; // 버튼 드래그 중 — updateMagnet 이 버튼을 숨기지 않게
   let captureBtnOffset = { dx: 0, dy: 0 }; // 영상 우상단 기준 이동 오프셋(드래그로 변경·저장)
@@ -979,7 +985,7 @@
     captureBtn.innerHTML =
       '<span class="ca-capbtn-ico">' +
       '<span class="ca-def">📷</span><span class="ca-hov">📸</span></span>';
-    captureBtn.title = "이 영상 전체를 캡처 (드래그하면 버튼 이동)";
+    captureBtn.title = "이 영상 전체를 캡처 — 단축키 F4 (드래그하면 버튼 이동)";
     captureBtn.style.display = "none";
     document.documentElement.appendChild(captureBtn);
     wireCaptureBtn();
@@ -1039,10 +1045,11 @@
     });
   }
 
-  // 📷 버튼 클릭 → 현재 자석이 가리키는 영상 전체를 1장 캡처.
-  function triggerVideoCapture() {
-    if (!magnetVideo) return;
-    const r = magnetVideo.v.getBoundingClientRect();
+  // 📷 버튼 클릭(인자 없음) → 현재 자석이 가리키는 영상. F4 단축키 → 인자로 받은 영상.
+  function triggerVideoCapture(videoEl) {
+    const v = videoEl || (magnetVideo && magnetVideo.v);
+    if (!v) return;
+    const r = v.getBoundingClientRect();
     const fullBox = {
       x: r.left + window.scrollX,
       y: r.top + window.scrollY,
@@ -1059,6 +1066,28 @@
     });
     document.documentElement.appendChild(boxEl);
     commitRectCapture(fullBox, boxEl);
+  }
+
+  // F4 단축키용 대상 선택: 마우스 밑 영상 우선, 없으면 화면(뷰포트)에서 가장 넓게 보이는 영상.
+  function pickVideoForShortcut() {
+    if (lastMouse) {
+      const under = videoUnderPoint(lastMouse.x, lastMouse.y);
+      if (under) return under.v;
+    }
+    let best = null;
+    let bestArea = 0;
+    for (const v of document.querySelectorAll("video")) {
+      const r = v.getBoundingClientRect();
+      const vw = Math.min(r.right, window.innerWidth) - Math.max(r.left, 0); // 뷰포트와 겹치는 가로
+      const vh = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0); // 겹치는 세로
+      if (vw <= 0 || vh <= 0) continue; // 화면 밖 영상 제외
+      const area = vw * vh;
+      if (area > bestArea) {
+        bestArea = area;
+        best = v;
+      }
+    }
+    return best;
   }
 
   function updateMagnet(e) {
