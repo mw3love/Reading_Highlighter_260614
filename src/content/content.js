@@ -11,6 +11,12 @@
 
   const uid = () => "ca" + Math.random().toString(36).slice(2, 9);
 
+  // OS 감지 — 단축키 라벨·동작을 윈도우/맥에 맞춰 분기. (Mac: Option=Alt, F4는 OS가 가로채 불안정)
+  const IS_MAC =
+    /Mac|iPhone|iPad/i.test(navigator.platform || "") || /Mac OS X/i.test(navigator.userAgent || "");
+  const modLabel = (n) => (IS_MAC ? "⌥" + n : "Alt+" + n); // 숫자 단축키 라벨: 맥 ⌥1 / 윈도우 Alt+1
+  const capLabel = IS_MAC ? "⌥` (Option+백틱)" : "F4"; // 영상 캡처 단축키 라벨
+
   // ---------- 도구막대 ----------
   const bar = document.createElement("div");
   bar.className = "ca-toolbar";
@@ -19,12 +25,12 @@
   bar.innerHTML =
     '<span class="ca-grip" title="드래그해 이동">⠿</span>' +
     '<span class="ca-bar-main">' +
-    '<button data-mode="highlight" title="형광펜 (단축키 Alt+1)">🖊️ 형광펜</button>' +
-    '<button data-mode="rect" title="네모 캡처 영역 (단축키 Alt+2)">⬚ 네모</button>' +
+    '<button data-mode="highlight" title="형광펜 (단축키 ' + modLabel("1") + ')">🖊️ 형광펜</button>' +
+    '<button data-mode="rect" title="네모 캡처 영역 (단축키 ' + modLabel("2") + ')">⬚ 네모</button>' +
     '<span class="ca-sep"></span>' +
-    '<button data-act="panel" title="주석 정리·AI 요약 패널 (단축키 Alt+3)">📋 정리·AI</button>' +
+    '<button data-act="panel" title="주석 정리·AI 요약 패널 (단축키 ' + modLabel("3") + ')">📋 정리·AI</button>' +
     '<span class="ca-sep"></span>' +
-    '<button data-act="notion" title="Notion 인박스 DB로 저장 (단축키 Alt+4)">📝 Notion</button>' +
+    '<button data-act="notion" title="Notion 인박스 DB로 저장 (단축키 ' + modLabel("4") + ')">📝 Notion</button>' +
     "</span>" +
     '<button class="ca-bar-min" data-act="bar-min" title="도구막대 접기/펼치기 (단축키 `)">▸</button>';
   bar.classList.add("ca-bar-collapsed"); // 기본은 접힌 상태
@@ -661,7 +667,8 @@
     if (e.target.closest("button")) e.preventDefault();
   });
 
-  // 단축키: ` 도구막대 접기/펼치기(처음 펼칠 때만 형광펜까지 ON), Esc 모드 해제 / Alt+1~4 기능
+  // 단축키: ` 도구막대 접기/펼치기(처음 펼칠 때만 형광펜까지 ON), Esc 모드 해제 / Alt(맥 Option)+1~4 기능.
+  // 영상 캡처: 윈도우 F4 / 맥 Option+백틱(맥은 F4를 OS가 가로채 불안정 — 윈도우엔 Alt+백틱 안 묶음).
   // (Alt 를 붙여 YouTube 등 사이트의 단일키 단축키와 안 겹치게 함)
   document.addEventListener("keydown", (e) => {
     if (extHidden) return; // 확장이 꺼진(미니팝업 OFF) 상태면 단축키(백틱 등) 무시
@@ -686,21 +693,29 @@
       }
       return;
     }
-    // Alt + 숫자
-    switch (e.key) {
-      case "1":
+    // 맥: Option+백틱 = 영상 캡처 (윈도우는 F4 사용 — 윈도우엔 Alt+백틱을 안 묶어 PowerToys 등과 충돌 없음)
+    if (IS_MAC && e.code === "Backquote") {
+      e.preventDefault();
+      const v = pickVideoForShortcut();
+      if (v) triggerVideoCapture(v);
+      return;
+    }
+    // Alt(맥은 Option) + 숫자 — e.code(물리 키 위치)로 매칭해 맥에서 Option+숫자가 특수문자(™ 등)로
+    // 바뀌어 e.key 가 안 맞던 문제를 피한다. preventDefault 로 그 특수문자 입력도 차단.
+    switch (e.code) {
+      case "Digit1":
         e.preventDefault();
         mode === "highlight" ? applyMode(null) : activateHighlight();
         break;
-      case "2":
+      case "Digit2":
         e.preventDefault();
         applyMode(mode === "rect" ? null : "rect");
         break;
-      case "3":
+      case "Digit3":
         e.preventDefault();
         togglePanelTab("annotations");
         break;
-      case "4":
+      case "Digit4":
         e.preventDefault();
         exportNotion();
         break;
@@ -994,7 +1009,7 @@
     captureBtn.innerHTML =
       '<span class="ca-capbtn-ico">' +
       '<span class="ca-def">📷</span><span class="ca-hov">📸</span></span>';
-    captureBtn.title = "이 영상 전체를 캡처 — 단축키 F4 (드래그하면 버튼 이동)";
+    captureBtn.title = "이 영상 전체를 캡처 — 단축키 " + capLabel + " (드래그하면 버튼 이동)";
     captureBtn.style.display = "none";
     document.documentElement.appendChild(captureBtn);
     wireCaptureBtn();
@@ -1120,6 +1135,38 @@
     positionCaptureBtn(vid.v.getBoundingClientRect());
   }
 
+  // 영상 캡처 피드백 — 캡처한 영역(box, 페이지 좌표)에 흰 셔터 플래시(카메라 '찰칵')를 잠깐 띄웠다
+  // 자동 제거. 스크린샷에 흰빛이 박히지 않도록 캡처가 '끝난 뒤'에 호출한다.
+  function shutterFlash(box) {
+    const fx = document.createElement("div");
+    fx.className = "ca-shutter";
+    Object.assign(fx.style, {
+      left: box.x + "px",
+      top: box.y + "px",
+      width: box.w + "px",
+      height: box.h + "px",
+    });
+    document.documentElement.appendChild(fx);
+    fx.addEventListener("animationend", () => fx.remove());
+    setTimeout(() => fx.remove(), 600); // 애니메이션 미발화 대비 안전망
+  }
+
+  // 화면 하단 토스트 — 패널을 최소화해 단축키만 쓸 때도 캡처 성공/실패를 인지하게.
+  let toastEl = null;
+  let toastTimer = null;
+  function showToast(text, isError) {
+    if (toastEl) toastEl.remove();
+    toastEl = document.createElement("div");
+    toastEl.className = "ca-toast" + (isError ? " ca-toast-err" : "");
+    toastEl.textContent = text;
+    document.documentElement.appendChild(toastEl);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      if (toastEl) toastEl.remove();
+      toastEl = null;
+    }, 1600);
+  }
+
   // 그린(또는 자석으로 만든) box 를 주석으로 추가하고 즉시 캡처한다. 드래그·영상클릭 양쪽에서 재사용.
   // boxEl: 비영상 캡처 때 페이지에 남길 빨강 박스(영상은 캡처 후 제거).
   function commitRectCapture(box, boxEl) {
@@ -1146,12 +1193,17 @@
     captureRegion(box)
       .then((dataUrl) => {
         ann.image = dataUrl;
-        if (vid) boxEl.remove(); // 영상: 캡처 끝나면 박스 제거(시청 방해·다음 캡처 혼동 방지)
+        if (vid) {
+          boxEl.remove(); // 영상: 캡처 끝나면 박스 제거(시청 방해·다음 캡처 혼동 방지)
+          shutterFlash(box); // 스크린샷이 끝난 지금 '찰칵' 플래시(캡처 이미지엔 안 박힘)
+          showToast("📷 캡처됨"); // 박스가 사라지므로 토스트로 성공을 확인(패널 최소화 대응)
+        }
         refreshAnnotationsPanel();
         scrollPanelTo(id); // 이미지·캡션칸이 생긴 뒤 다시 스크롤(캡션이 보이도록)
       })
       .catch((err) => {
         if (vid) boxEl.remove();
+        showToast("캡처 실패", true);
         console.warn("[주석] 캡처 실패:", err);
       });
   }
@@ -1279,13 +1331,16 @@
     }, 250);
   }
 
+  // 영상 캡처용 임시 박스(.ca-rect, data-ca-id 없음)는 제외 — 캡처 후 제거되면서
+  // 미니툴바가 고아로 남는 문제 방지. 영구 박스(비영상)와 형광펜만 대상.
+  const HOVER_SEL = "." + HL + ", .ca-rect[data-ca-id]";
   document.addEventListener("mouseover", (e) => {
     if (dragEl) return; // 네모를 그리는 중에는 툴바를 띄우지 않음
-    const el = e.target.closest("." + HL + ", .ca-rect");
+    const el = e.target.closest(HOVER_SEL);
     if (el) showToolsFor(el);
   });
   document.addEventListener("mouseout", (e) => {
-    if (e.target.closest("." + HL + ", .ca-rect")) scheduleHide();
+    if (e.target.closest(HOVER_SEL)) scheduleHide();
   });
   tools.addEventListener("mouseenter", () => clearTimeout(hideTimer));
   tools.addEventListener("mouseleave", scheduleHide);
@@ -1984,7 +2039,8 @@
 
   // 내보내기 1단계 — 어떤 인박스 DB 로 보낼지 고른다(평소엔 활성 DB가 미리 선택돼 그냥 통과).
   // 새 DB 만들기도 여기서. 목록 조회 실패 시 기존 자동 경로(분류 단계)로 폴백.
-  function showNotionDbStep(base, summary, parentId) {
+  // force=true 면 DB 가 1개여도 선택 화면을 건너뛰지 않는다(picker 의 'DB 변경·추가' 링크용).
+  function showNotionDbStep(base, summary, parentId, force) {
     showPanel("Notion 내보내기", "DB 목록 불러오는 중…", false);
     chrome.runtime.sendMessage({ type: "notion-list-dbs", parentId }, (resp) => {
       if (chrome.runtime.lastError || !resp || !resp.ok) {
@@ -1994,11 +2050,15 @@
         console.warn("[주석] DB 목록 실패:", err);
         return showNotionPicker(base, summary, parentId); // 폴백: 활성/자동 DB로 분류 단계 진행
       }
-      renderNotionDbStep(base, summary, parentId, resp.databases || [], resp.activeId);
+      renderNotionDbStep(base, summary, parentId, resp.databases || [], resp.activeId, force);
     });
   }
 
-  function renderNotionDbStep(base, summary, parentId, databases, activeId) {
+  function renderNotionDbStep(base, summary, parentId, databases, activeId, force) {
+    // DB 가 정확히 1개면 선택 단계를 건너뛰고 곧장 분류·저장 화면으로 — 백엔드가 그 단일 DB 를 자동 사용.
+    // (force 면 건너뛰지 않음: picker 의 'DB 변경·추가' 링크로 돌아왔을 때 무한 루프 방지 + 새 DB 생성 경로 유지.)
+    if (!force && databases.length === 1) return showNotionPicker(base, summary, parentId);
+
     panelBody.style.whiteSpace = "normal";
     panelBody.textContent = "";
     let chosen = activeId || (databases[0] && databases[0].id) || null;
@@ -2114,7 +2174,7 @@
         : resp && !resp.ok
         ? resp.error
         : null;
-      renderNotionPicker(base, summary, cats, warn);
+      renderNotionPicker(base, summary, cats, warn, parentId);
     });
   }
 
@@ -2130,10 +2190,37 @@
     );
   }
 
-  function renderNotionPicker(base, summary, cats, warn) {
+  function renderNotionPicker(base, summary, cats, warn, parentId) {
     panelBody.style.whiteSpace = "normal";
     panelBody.textContent = "";
     let chosen = cats[0] || "미분류";
+
+    // DB 가 1개라 선택 단계를 건너뛴 경우에도 다른 DB 선택·새 DB 생성으로 돌아갈 수 있는 작은 링크.
+    // 보조 동작이라 조용한 텍스트 링크로 두되, hover 밑줄로 클릭 가능함을 알리고 아래 구분선으로 본문과 분리.
+    const back = document.createElement("button");
+    // 화살표는 크게(볼드)해 또렷하게, 글자는 weight 600. flex+align-items:center 로 글리프 크기와
+    // 무관하게 세로 중앙정렬(이전 vertical-align magic number 방식은 폰트마다 틀어져 폐기).
+    back.innerHTML =
+      '<span style="font-size:17px !important;font-weight:600 !important;line-height:1 !important">‹</span>' +
+      '<span style="line-height:1 !important">DB 변경·추가</span>';
+    back.style.cssText =
+      "background:none !important;border:none !important;color:#666 !important;cursor:pointer !important;" +
+      "font-size:13px !important;font-weight:500 !important;padding:2px 0 0 !important;margin:0 !important;outline:none !important;" +
+      "box-shadow:none !important;display:inline-flex !important;align-items:center !important;gap:3px !important";
+    back.style.setProperty("text-decoration", "none", "important");
+    // 인라인 !important 와 싸우는 패널 구조라 :hover CSS 대신 JS 로 밑줄 토글.
+    back.addEventListener("mouseenter", () =>
+      back.style.setProperty("text-decoration", "underline", "important")
+    );
+    back.addEventListener("mouseleave", () =>
+      back.style.setProperty("text-decoration", "none", "important")
+    );
+    back.addEventListener("click", () => showNotionDbStep(base, summary, parentId, true));
+    panelBody.appendChild(back);
+
+    const backDiv = document.createElement("div"); // 내비게이션과 본문(분류 선택) 구분선
+    backDiv.style.cssText = "border-top:1px solid #eee !important;margin:6px 0 12px !important";
+    panelBody.appendChild(backDiv);
 
     const label = document.createElement("div");
     label.textContent = "분류 선택";

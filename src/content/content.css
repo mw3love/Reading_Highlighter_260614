@@ -279,6 +279,65 @@ html.ca-ext-off .ca-hl {
   background: rgba(226, 59, 59, 0.95);
 }
 
+/* 영상 캡처 셔터 플래시 — 캡처한 영상 영역에 흰 빛이 잠깐 번쩍였다 사라짐 */
+.ca-shutter {
+  position: absolute;
+  z-index: 2147483646;
+  background: #fff;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  animation: ca-shutter-fade 0.35s ease-out forwards;
+}
+@keyframes ca-shutter-fade {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 캡처 확인 토스트 — 화면 하단 중앙에 잠깐 떴다 사라짐(패널 최소화 시 성공 인지용) */
+.ca-toast {
+  position: fixed;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(30, 30, 30, 0.92);
+  color: #fff;
+  font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: ca-toast-inout 1.6s ease-out forwards;
+}
+.ca-toast.ca-toast-err {
+  background: rgba(200, 40, 40, 0.95);
+}
+@keyframes ca-toast-inout {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* 내보내기 메뉴 */
 .ca-menu {
   position: fixed;

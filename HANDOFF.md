@@ -2,11 +2,35 @@
 
 > 다른 PC에서 이어서 작업할 때 전후사정을 파악하기 위한 메모. (Claude는 세션 간 대화를 기억하지 못하므로 이 파일로 맥락을 넘긴다.)
 
-## 최종 업데이트: 2026-06-20 (0.9.0 AI 제공자 선택 + 패널 AI·복사 입구 + 미니 아이콘 통일 — 아래 ★ 먼저 읽을 것)
+## 최종 업데이트: 2026-06-21 (0.10.0 영상 캡처 피드백 + 크로스플랫폼 단축키 + Notion 1-DB 스킵 + 미니패널 고아 수정 — 아래 ★ 먼저 읽을 것)
 
 ## ★ 진행 중 / 다음 작업 (새 세션은 여기부터)
 
-### (NEW) 0.9.0 — AI 제공자 선택 + 정리 패널 AI·복사 입구 + 미니 아이콘 통일
+### (NEW) 0.10.0 — 캡처 피드백 + 크로스플랫폼 단축키 + Notion 1-DB 스킵 + 미니패널 고아 수정 (`content.js`·`content.css`·`manifest.json`)
+
+**A) 영상 네모 미니패널 고아 수정 (`content.js`)**
+- 증상: 영상 위에 네모를 그리면 hover 미니툴바(`[🤖][🖼][✕]`)만 남고 앵커(박스)는 사라져 떠 있던 문제.
+- 원인: 영상 캡처는 임시 `.ca-rect` 박스를 캡처 후 제거(`commitRectCapture`의 `boxEl.remove()`)하는데, 그 박스가 잠깐 떠 있는 동안 마우스가 지나가면 문서 `mouseover` 핸들러가 `.ca-rect`에 걸려 미니툴바를 그 박스에 띄움 → 박스 제거 후 툴바만 고아로 남음.
+- 수정: hover 미니툴바 셀렉터를 `.ca-rect` → **`.ca-rect[data-ca-id]`** 로 좁힘. 영상 임시 박스는 caId 없음(비영상만 `dataset.caId` 설정), 미니툴바는 어차피 caId로 주석을 찾으므로 무의미한 대상 제외. → **사용자 실조건 확인("잘됨")**.
+
+**B) 영상 캡처 피드백 — 셔터 플래시 + 토스트 (`content.js`·`content.css`)**
+- 패널을 최소화하고 F4(단축키)만 쓰면 캡처가 됐는지 확인이 어려웠음 → 시각 피드백 추가.
+- **셔터 플래시**(`.ca-shutter`): 캡처한 영역에 흰 빛이 잠깐 번쩍(카메라 '찰칵'). **스크린샷이 끝난 뒤**(`captureRegion` 성공 콜백)에 발화 — 트리거 시점에 띄우면 흰빛이 캡처 이미지에 박혀 뿌예지던 문제 때문(중요). 좌표는 페이지좌표 box 기준.
+- **토스트**(`.ca-toast`): 캡처 성공 시 상단 중앙에 `📷 캡처됨` 1.6초, 실패 시 빨강 `캡처 실패`. 위치는 상단(top:64px, 모드 배지·툴바와 안 겹침). → **사용자 실조건 확인("잘됨")**.
+
+**C) 크로스플랫폼 단축키 (윈도우/맥) (`content.js`)**
+- `IS_MAC` 감지(`navigator.platform`/`userAgent`). 숫자 단축키를 `e.key`→**`e.code`(`Digit1~4`)** 로 매칭 — 맥에서 Option+숫자가 특수문자(¡™£¢)로 바뀌어 `e.key`가 안 맞아 단축키가 죽던 문제 해결. `e.code`는 물리 키라 OS·레이아웃 무관, `preventDefault`로 특수문자 입력도 차단.
+- **영상 캡처**: 윈도우 `F4`(유지) / 맥 `Option+백틱`(`e.code "Backquote"`). **윈도우엔 Alt+백틱을 안 묶음** — 사용자가 PowerToys always-on-top에 그 키를 써서 충돌 회피. F4 핸들러는 양쪽 유지(맥에선 OS가 가로채 잘 안 와 보조).
+- 버튼 툴팁 라벨 OS별 표기(`modLabel`: `Alt+N`/`⌥N`, `capLabel`: `F4`/`⌥\``).
+- **검증 상태**: 윈도우=문법+로직 프록시검증(`e.code`는 윈도우에서 기존 동작과 동일). **맥=미검증(실기 없음)** — `⌥1~4`·`⌥백틱` 실동작은 사용자 맥 확인 필요. 데드키(맥 US 자판 Option+백틱=그레이브 악센트)지만 `e.code`+`preventDefault`로 작동 예상.
+- 주의: `e.code "Digit1"`은 상단 숫자열만 — 넘패드(`Numpad1`)는 제외(윈도우 Alt코드 충돌 회피 측면에선 오히려 안전). 또한 맥에서 Option+숫자/Option+백틱은 ™£¢·악센트 입력 조합이라 확장 활성 중엔 페이지 입력칸에서 그 글자가 가려짐(기존 `typing && !altKey`라 Alt/Option 조합은 타이핑 중에도 발동). 거슬리면 맥 한정 '입력칸 포커스 중 미발동' 가드 추가 검토 여지.
+
+**D) Notion 내보내기 — DB 1개면 선택단계 스킵 (`content.js`)**
+- `renderNotionDbStep`: DB가 **정확히 1개**면 선택 화면을 건너뛰고 곧장 분류·저장 화면(`showNotionPicker`)으로 → `Notion에 저장` 버튼 즉시 노출. 백엔드는 이미 단일 DB 자동 사용(`notionGetOrCreateDatabase`, `worker.js`)이라 추가 작업 없음. 0개=선택화면(생성 필요), 2개+=선택화면.
+- 스킵하면 `+ 새 DB` 입구가 사라지는 함정 방지로, 분류 화면 상단에 **`‹ DB 변경·추가` 링크**(`showNotionDbStep(..., force=true)` — 1개여도 선택화면 강제 표시, 무한루프 방지 + 새 DB 생성 경로 유지). 시그니처: `showNotionDbStep`/`renderNotionDbStep`에 `force`, `renderNotionPicker`에 `parentId` 추가.
+- 링크 디자인: 회색 `#666` medium(500) + 화살표 `‹`(17px/600) `inline-flex align-items:center`로 세로 중앙정렬 + hover 밑줄(인라인 `!important` 구조라 JS `setProperty(...,'important')` 토글) + 아래 구분선. → **사용자 실조건 확인("잘됨")**.
+
+### 0.9.0 — AI 제공자 선택 + 정리 패널 AI·복사 입구 + 미니 아이콘 통일
 
 **A) AI 제공자 선택 (게이트웨이 ↔ 무료 Gemini) (`worker.js`·`options.html/js`·`content.js`·`manifest.json`)**
 - 옵션에 **제공자 드롭다운**(기관 게이트웨이 / Google Gemini). 둘 다 OpenAI 호환이라 워커 `aiConfig()`가 base URL·키만 분기 — 게이트웨이=`factchat-cloud.mindlogic.ai/v1/gateway`, Gemini=`generativelanguage.googleapis.com/v1beta/openai`. chat·models·비전(image_url+base64) 전부 동일 형식(공식 문서 확인).
