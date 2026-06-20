@@ -6,16 +6,37 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
-const GW_BASE = "https://factchat-cloud.mindlogic.ai/v1/gateway";
+// AI 프로바이더 — 둘 다 OpenAI 호환(/chat/completions·/models·비전 image_url) 이라 base URL·키만 다름.
+const GW_BASE = "https://factchat-cloud.mindlogic.ai/v1/gateway"; // 기관 게이트웨이(mindlogic)
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"; // Google Gemini 무료 API
 
-// 게이트웨이 chat 호출 — 키는 storage 에서 읽는다(콘텐츠/옵션 어디서 호출하든 CORS 우회)
+// Gemini /models 는 id 를 "models/gemini-2.5-flash" 처럼 접두할 수 있어 chat 에 바로 쓰도록 접두 제거.
+// (게이트웨이 id 엔 접두가 없어 무해.)
+function stripModelsPrefix(id) {
+  return String(id || "").replace(/^models\//, "");
+}
+
+// 현재 선택된 프로바이더의 base URL·키를 해석한다. 키는 프로바이더별로 따로 저장(전환해도 안 지워짐).
+async function aiConfig() {
+  const { ai_provider, gw_key, gemini_key } = await chrome.storage.local.get([
+    "ai_provider",
+    "gw_key",
+    "gemini_key",
+  ]);
+  if (ai_provider === "gemini")
+    return { provider: "gemini", base: GEMINI_BASE, key: gemini_key, label: "Gemini", modelsPath: "/models" };
+  return { provider: "gateway", base: GW_BASE, key: gw_key, label: "게이트웨이", modelsPath: "/models/" };
+}
+
+// chat 호출 — 키는 storage 에서 읽는다(콘텐츠/옵션 어디서 호출하든 CORS 우회). 프로바이더 무관 OpenAI 형식.
 async function gwChat(body) {
-  const { gw_key } = await chrome.storage.local.get("gw_key");
-  if (!gw_key) throw new Error("API 키가 설정되지 않았습니다 (확장 옵션에서 입력하세요).");
-  const res = await fetch(GW_BASE + "/chat/completions", {
+  const cfg = await aiConfig();
+  if (!cfg.key)
+    throw new Error(cfg.label + " API 키가 설정되지 않았습니다 (확장 옵션에서 입력하세요).");
+  const res = await fetch(cfg.base + "/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: "Bearer " + gw_key,
+      Authorization: "Bearer " + cfg.key,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -28,16 +49,16 @@ async function gwChat(body) {
   return (data.choices && data.choices[0] && data.choices[0].message.content) || "";
 }
 
-// 게이트웨이가 제공하는 모델 목록 (OpenAI 호환 /models)
+// 선택된 프로바이더가 제공하는 모델 목록 (OpenAI 호환 /models)
 async function gwModels() {
-  const { gw_key } = await chrome.storage.local.get("gw_key");
-  if (!gw_key) throw new Error("API 키가 설정되지 않았습니다.");
-  const res = await fetch(GW_BASE + "/models/", {
-    headers: { Authorization: "Bearer " + gw_key },
+  const cfg = await aiConfig();
+  if (!cfg.key) throw new Error(cfg.label + " API 키가 설정되지 않았습니다.");
+  const res = await fetch(cfg.base + cfg.modelsPath, {
+    headers: { Authorization: "Bearer " + cfg.key },
   });
   if (!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
-  return (data.data || []).map((m) => ({ id: m.id, owner: m.owned_by || "" }));
+  return (data.data || []).map((m) => ({ id: stripModelsPrefix(m.id), owner: m.owned_by || "" }));
 }
 
 // ---------- Notion 연동 (5단계: 아카이빙) ----------

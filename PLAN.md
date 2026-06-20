@@ -15,8 +15,8 @@
 | 항목 | 결정 | 이유 |
 |---|---|---|
 | 주석 저장 | **세션만** (재방문 복원 X) | 텍스트 위치 앵커링 난제 회피 |
-| AI 백엔드 | AI 게이트웨이 | 보유 키. OpenAI 호환 chat+vision 실측 확인 |
-| 모델 | 요약=Claude/GPT, 이미지=Gemini/GPT 비전 | 게이트웨이 41종 제공 |
+| AI 백엔드 | 게이트웨이 또는 Gemini(선택) | 둘 다 OpenAI 호환 chat+vision. 옵션에서 전환(0.9.0) |
+| 모델 | 요약=Claude/GPT/Gemini, 이미지=Gemini 비전 | 제공자별 모델 목록 동적 로드 |
 | 스택 | 순수 JS, 빌드 없음 | unpacked 로드로 바로 반복 |
 | 캡처 | captureVisibleTab + canvas 크롭 | 가시영역 찍고 영역만 오림 |
 | PDF | HTML → 브라우저 인쇄 | 한글 폰트 임베드 회피 |
@@ -63,12 +63,15 @@ options.html / options.js               # API 키 입력
   - ⚠ ①의 "영상 클릭=전체 캡처"는 **0.8.0에서 "클릭=재생/정지"로 되돌리고 캡처는 📷 버튼으로 분리**(아래 13 참조).
 - [x] **13. 영상 캡처 버튼 + 클릭=재생/정지 복원 (0.8.0)** — 0.7.0의 "영상 클릭=전체 캡처"를 되돌려 **영상 본문 단순 클릭 = 재생/정지 토글(+`video.focus`로 방향키 탐색 유지)**. 영상 전체 1장 캡처는 호버 시 영상 **우상단에 뜨는 📷 캡처 버튼**으로 분리(드래그=부분 캡처는 그대로). 버튼은 드래그로 **이동 가능**하고 위치는 `storage.local`(`ca_capbtn_offset`)에 저장(새로고침·동일 크롬계정 PC 간 유지). **버튼에 호버할 때만** 영상 점선(`.ca-magnet`)이 떠 "이 영역이 캡처됨"을 미리 보여줌(영상 호버=버튼만 노출). 캡처 직전 버튼·점선을 숨기고 2프레임 리페인트 후 `captureVisibleTab` → 캡처 이미지에 오버레이 안 박힘. 버튼=아이콘 전용 40×40(호버 시 📷→📸·확대·흰 글로우 링), 호스트 사이트 CSS 누수 방지 `color`/`background` 인라인 `!important`.
   - 검증: 클릭=재생/정지·📷 버튼 캡처·드래그 이동·위치 유지·캡처 시 오버레이 숨김 = **사용자 실조건 확인(2026-06-19, "잘됨")**. "점선=버튼 호버 시에만 + 아이콘 전용(캡처 글자 제거)"은 **방금 변경 — 미검증**. 캡처 오버레이 숨김의 리페인트 타이밍은 육안 확인 권장(헤드리스 아님).
+- [x] **14. AI 제공자 선택 + 패널 AI·복사 입구 + 아이콘 통일 (0.9.0)** — ① **AI 제공자 선택**: 옵션에 제공자(기관 게이트웨이 / 무료 Gemini) 드롭다운. 둘 다 OpenAI 호환이라 워커 `aiConfig()`가 base URL·키만 분기(Gemini=`generativelanguage.googleapis.com/v1beta/openai` — chat·models·비전 호환). 키·모델 제공자별 저장(`gw_key`/`gemini_key`·`gw_model`/`gemini_model`·활성포인터 `ai_provider`), **적응형 키 1칸**, **모델 새로고침 ↻ 버튼**, Gemini id `models/` 접두 정규화(`stripModelsPrefix`). content는 `getActiveModel()` 사용(비전은 `gemini-2.5-flash` 고정). ② **정리 패널 AI·복사 입구**: 영상 캡처는 박스를 지워 hover 미니툴바를 못 써서, 패널 항목에 🤖(질문)·복사(🖼/📋) 추가 → 영상캡처·오프스크린 네모·노트까지 AI·복사 가능(hover 툴바와 로직 공유). ③ **아이콘 통일**: 패널 버튼을 hover 툴바와 같은 진한 원형으로(복사 아이콘 가독성). ④ **식별 표현 제거**: "전북대/학교"→"기관"(웹스토어 대비).
+  - 검증: 4파일 문법·전 흐름 로직·Gemini 엔드포인트(문서) 확인. **실제 Gemini 키 호출·실조건은 사용자 확인 필요**(저장·연결테스트·질문·게이트웨이 복원). 패널 버튼·아이콘은 리로드 후 육안 확인 권장. 주의: Gemini `/models`는 채팅 외 모델도 섞여 옴.
 
 ## 게이트웨이 메모 (2026-06-13 실측)
 
 - 베이스: `https://factchat-cloud.mindlogic.ai/v1/gateway`
 - `/chat/completions` OpenAI 호환. 비전: `image_url` data URI 입력 → `gemini-2.5-flash`, `gpt-5-mini` 정상
-- 키: `~/.claude/.secrets/jbnu-gateway.key` (확장에선 옵션 페이지로 별도 입력)
+- 키: 로컬 `.secrets` 파일에 보관 (확장에선 옵션 페이지로 별도 입력)
+- **(0.9.0) Gemini 무료 API도 선택 가능**: 옵션 제공자 드롭다운으로 전환. Gemini OpenAI 호환 base `https://generativelanguage.googleapis.com/v1beta/openai` — `/chat/completions`·`/models`·비전(image_url+base64) 동일 형식. 키는 `gemini_key`로 따로 저장(게이트웨이 `gw_key`와 독립), 활성 제공자 = `ai_provider`. 워커 `aiConfig()`가 분기.
 
 ## Notion 연동 메모 (2026-06-14 실측)
 

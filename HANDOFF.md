@@ -2,11 +2,29 @@
 
 > 다른 PC에서 이어서 작업할 때 전후사정을 파악하기 위한 메모. (Claude는 세션 간 대화를 기억하지 못하므로 이 파일로 맥락을 넘긴다.)
 
-## 최종 업데이트: 2026-06-19 (0.8.2 툴바 아이콘 추가 — 아래 ★ 먼저 읽을 것)
+## 최종 업데이트: 2026-06-20 (0.9.0 AI 제공자 선택 + 패널 AI·복사 입구 + 미니 아이콘 통일 — 아래 ★ 먼저 읽을 것)
 
 ## ★ 진행 중 / 다음 작업 (새 세션은 여기부터)
 
-### (NEW) 0.8.2 — 툴바(action) 아이콘 추가 (`manifest.json`·`icons/`)
+### (NEW) 0.9.0 — AI 제공자 선택 + 정리 패널 AI·복사 입구 + 미니 아이콘 통일
+
+**A) AI 제공자 선택 (게이트웨이 ↔ 무료 Gemini) (`worker.js`·`options.html/js`·`content.js`·`manifest.json`)**
+- 옵션에 **제공자 드롭다운**(기관 게이트웨이 / Google Gemini). 둘 다 OpenAI 호환이라 워커 `aiConfig()`가 base URL·키만 분기 — 게이트웨이=`factchat-cloud.mindlogic.ai/v1/gateway`, Gemini=`generativelanguage.googleapis.com/v1beta/openai`. chat·models·비전(image_url+base64) 전부 동일 형식(공식 문서 확인).
+- **키·모델 제공자별 저장**(`gw_key`/`gemini_key`, `gw_model`/`gemini_model`) + 활성 포인터 `ai_provider`. 전환해도 서로 안 지워짐. 옵션 키 입력은 **적응형 1칸**(전환 시 그 제공자 값 로드). Gemini `/models` id의 `models/` 접두는 `stripModelsPrefix`로 제거.
+- **모델 새로고침 ↻ 버튼** 추가 — 기존엔 옵션 열 때/저장 시에만 목록 갱신됐는데, 옵션 다시 안 열고 즉시 갱신(+제공자 전환 시 유용). content.js는 `getActiveModel()`로 활성 제공자 모델 사용(질문·요약 2곳). 비전은 양쪽 다 있는 `gemini-2.5-flash` 고정.
+- **검증 상태**: 4파일 문법·전 흐름 로직·Gemini 엔드포인트(문서) 확인. **실제 Gemini 키 호출은 미확인** — 사용자 실조건 확인 필요(저장·연결테스트·질문·게이트웨이 복원). 주의: Gemini `/models`는 채팅 외 모델(임베딩 등)도 섞여 옴.
+
+**B) 정리 패널에 AI·복사 입구 (`content.js`·`content.css`)**
+- **영상 캡처는 캡처 후 박스를 지워서**(시청 방해 방지) hover 미니툴바(🤖·복사)를 띄울 대상이 없었음 → 정리 패널 각 항목에 🤖(질문)·복사(🖼 이미지/📋 텍스트) 버튼 추가. **영상캡처·오프스크린 네모·노트**까지 AI·복사 가능해짐. hover 미니툴바는 그대로 유지(공유 함수 `askAnnotation`/`copyAnnotationText`/`copyAnnotationImage`로 양쪽이 같은 로직).
+- 노트는 hover 대상이 없어 원래 AI 불가였는데 이번에 가능. 빈 노트 가드는 `askAnnotation`에서. 노트 편집은 재렌더가 없어 🤖는 노트에 항상 노출.
+
+**C) 미니 아이콘 통일 (`content.css`)**
+- 패널 버튼(🤖·복사·✕·노트 ▲▼)을 hover 툴바와 같은 **진한 원형+그림자**로 통일. 흰 반투명이라 복사 아이콘(📋/🖼)이 안 읽히던 문제 해결(대비 확보). 위치·크기 동일, 외형만. 버튼 가로배치 `✕(6)·복사(28)·🤖(50)·노트▲▼(72)` + 텍스트 우측 패딩 보정.
+
+**D) 식별 표현 제거 (웹스토어 대비)**
+- "전북대"·"학교" → "기관"(중의적). `src`·`manifest`·`PLAN.md` 클린. 벤더명 mindlogic·게이트웨이 URL은 학교 무관이라 유지. `memory/`(로컬·비추적)는 그대로.
+
+### (0.8.2) — 툴바(action) 아이콘 추가 (`manifest.json`·`icons/`)
 
 그동안 아이콘 미지정이라 크롬이 이름 첫 글자 "R" 회색 타일을 자동 생성 → 색 있는 다른 확장들 사이에서 안 띔. 전용 아이콘을 만들어 연결.
 

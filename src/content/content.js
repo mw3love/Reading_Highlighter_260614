@@ -88,6 +88,15 @@
   panelBody.addEventListener("click", (e) => {
     const del = e.target.closest(".ca-anno-del");
     if (del) return deleteAnnotationById(del.getAttribute("data-ca-del"));
+    const ai = e.target.closest(".ca-anno-ai");
+    if (ai) return askAnnotation(annotations.find((a) => a.id === ai.getAttribute("data-ca-ai")));
+    const cp = e.target.closest(".ca-anno-copy");
+    if (cp) {
+      const ann = annotations.find((a) => a.id === cp.getAttribute("data-ca-copy"));
+      return cp.getAttribute("data-kind") === "img"
+        ? copyAnnotationImage(ann, cp)
+        : copyAnnotationText(ann, cp);
+    }
     const add = e.target.closest(".ca-note-add");
     if (add) return insertNoteAfter(add.getAttribute("data-after"));
     const mv = e.target.closest(".ca-note-mv");
@@ -1297,51 +1306,86 @@
     tools.style.display = "none";
     toolsTarget = null;
   });
-  // 형광펜 문장(hover 한 span)을 텍스트로 복사
-  btnCopyTxt.addEventListener("click", () => {
-    if (!toolsTarget) return;
-    const ann = annotations.find((a) => a.id === toolsTarget.dataset.caId);
-    const txt = (ann && ann.text) || toolsTarget.textContent || "";
+  // 복사 성공 시 버튼을 잠깐 ✅ 로 바꿔 피드백.
+  function flashCopied(btnEl) {
+    if (!btnEl) return;
+    const prev = btnEl.textContent;
+    btnEl.textContent = "✅";
+    setTimeout(() => (btnEl.textContent = prev), 900);
+  }
+  // 텍스트(형광펜 문장·노트) 복사 — hover 미니툴바와 정리 패널이 공유. btnEl 에 ✅ 피드백.
+  function copyAnnotationText(ann, btnEl, fallbackText) {
+    const txt = (ann && ann.text) || fallbackText || "";
     if (!txt) return;
     navigator.clipboard
       .writeText(txt)
-      .then(() => {
-        const prev = btnCopyTxt.textContent;
-        btnCopyTxt.textContent = "✅";
-        setTimeout(() => (btnCopyTxt.textContent = prev), 900);
-      })
+      .then(() => flashCopied(btnEl))
       .catch(() => {});
-  });
-  // 네모 캡처를 실제 PNG(image/png)로 클립보드에 올림 — data-URI HTML 과 달리 Notion·한글에도 붙는다.
-  btnCopyImg.addEventListener("click", async () => {
-    if (!toolsTarget) return;
-    const ann = annotations.find((a) => a.id === toolsTarget.dataset.caId);
+  }
+  // 캡처를 실제 PNG(image/png)로 클립보드에 — data-URI HTML 과 달리 Notion·한글에도 붙는다. 양쪽 공유.
+  async function copyAnnotationImage(ann, btnEl) {
     if (!ann || !ann.image) return alert("이미지가 아직 캡처되지 않았습니다.");
     try {
       const blob = await (await fetch(ann.image)).blob();
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      const prev = btnCopyImg.textContent;
-      btnCopyImg.textContent = "✅";
-      setTimeout(() => (btnCopyImg.textContent = prev), 900);
+      flashCopied(btnEl);
     } catch (e) {
       alert("이미지 복사 실패: " + e.message);
     }
-  });
-  btnAsk.addEventListener("click", async () => {
+  }
+  // 형광펜 문장(hover 한 span)을 텍스트로 복사
+  btnCopyTxt.addEventListener("click", () => {
     if (!toolsTarget) return;
-    const ann = annotations.find((a) => a.id === toolsTarget.dataset.caId);
+    copyAnnotationText(
+      annotations.find((a) => a.id === toolsTarget.dataset.caId),
+      btnCopyTxt,
+      toolsTarget.textContent
+    );
+  });
+  // 네모 캡처를 PNG 로 클립보드에 복사
+  btnCopyImg.addEventListener("click", () => {
+    if (!toolsTarget) return;
+    copyAnnotationImage(annotations.find((a) => a.id === toolsTarget.dataset.caId), btnCopyImg);
+  });
+  // hover 미니툴바 🤖 — 떠 있는 주석(형광펜/네모)을 대상으로 질문. 실로직은 askAnnotation 공유.
+  btnAsk.addEventListener("click", () => {
+    if (!toolsTarget) return;
+    askAnnotation(annotations.find((a) => a.id === toolsTarget.dataset.caId));
+  });
+
+  // 활성 프로바이더(게이트웨이/Gemini)에 맞는 선택 모델. 비전은 호출부에서 gemini-2.5-flash 로 별도 고정.
+  async function getActiveModel() {
+    const { ai_provider, gw_model, gemini_model } = await chrome.storage.local.get([
+      "ai_provider",
+      "gw_model",
+      "gemini_model",
+    ]);
+    return (ai_provider === "gemini" ? gemini_model : gw_model) || "gemini-2.5-flash";
+  }
+
+  // 주석 1건을 AI에 질문 — hover 미니툴바와 정리 패널(영상캡처·노트·오프스크린 네모) 양쪽이 공유.
+  async function askAnnotation(ann) {
     if (!ann) return;
     const isRect = ann.type === "rect";
     if (isRect && !ann.image) return alert("이미지가 아직 캡처되지 않았습니다.");
+    const isNote = ann.type === "note";
+    if (isNote && !(ann.text && ann.text.trim())) return alert("노트가 비어 있습니다.");
 
     const title = isRect ? "이미지 질문" : "텍스트 질문";
     const q = prompt(
-      isRect ? "이 이미지에 대해 무엇을 물어볼까요?" : "이 문장에 대해 무엇을 물어볼까요?",
-      isRect ? "이 이미지를 설명해줘." : "이 문장을 쉽게 설명해줘."
+      isRect
+        ? "이 이미지에 대해 무엇을 물어볼까요?"
+        : isNote
+        ? "이 노트에 대해 무엇을 물어볼까요?"
+        : "이 문장에 대해 무엇을 물어볼까요?",
+      isRect
+        ? "이 이미지를 설명해줘."
+        : isNote
+        ? "이 노트 내용을 쉽게 풀어줘."
+        : "이 문장을 쉽게 설명해줘."
     );
     if (!q) return;
 
-    const { gw_model } = await chrome.storage.local.get("gw_model");
     // 답변 방식(텍스트·이미지 공통) — 짧게 끊지 말고 깊이 있게. 사용자가 줄쳐가며 읽는 용도.
     const style =
       "[답변 방식]\n" +
@@ -1365,16 +1409,20 @@
         { type: "image_url", image_url: { url: ann.image } },
       ];
     } else {
-      model = gw_model || "gemini-2.5-flash";
+      model = await getActiveModel();
       const pageText = (document.body.innerText || "").slice(0, 6000);
+      const intro = isNote
+        ? "사용자가 웹페이지를 읽다가 직접 작성한 노트 메모에 대해 질문한다. "
+        : "사용자가 웹페이지를 읽다가 일부를 강조하고 질문한다. ";
+      const label = isNote ? "사용자가 작성한 노트" : "사용자가 강조한 부분";
       content =
-        "사용자가 웹페이지를 읽다가 일부를 강조하고 질문한다. " +
+        intro +
         "아래 페이지 정보는 '사용자가 무엇을 보고 무엇을 묻는지' 파악하기 위한 맥락일 뿐이며, " +
         "답은 페이지 안에 한정하지 말고 너의 전체 지식으로 포괄적으로 작성하라.\n" +
         style +
         "\n[페이지 제목] " + document.title + "\n" +
         "[URL] " + location.href + "\n" +
-        '[사용자가 강조한 부분] "' + ann.text + '"\n\n' +
+        "[" + label + '] "' + ann.text + '"\n\n' +
         "[참고용 페이지 본문]\n" + pageText + "\n\n" +
         "[질문] " + q;
     }
@@ -1390,7 +1438,7 @@
         else showPanel(title, "실패: " + ((resp && resp.error) || "알 수 없음"), false);
       }
     );
-  });
+  }
 
   function removeHighlight(span) {
     dropAnnotation(span.dataset.caId); // DOM 제거 전에: 노트 승계 순서 계산이 span 위치를 읽을 수 있게
@@ -1567,11 +1615,28 @@
         .map((it, i) => {
           const del =
             '<button class="ca-anno-del" data-ca-del="' + it.id + '" title="이 주석 삭제">✕</button>';
+          // 🤖 질문 — 영상캡처·오프스크린 네모·노트는 페이지에 hover 대상이 없어 여기서 입구를 연다.
+          // (떠 있는 형광펜·네모의 hover 미니툴바 🤖는 그대로 유지.)
+          // 노트는 항상 🤖를 단다 — 노트 편집은 재렌더가 없어(포커스 유지), text.trim() 조건으로 걸면
+          // 방금 입력한 노트에 🤖가 안 나타난다. 빈 노트 가드는 askAnnotation 에서 처리.
+          const canAi =
+            it.type === "highlight" || (it.type === "rect" && it.image) || it.type === "note";
+          const ai = canAi
+            ? '<button class="ca-anno-ai" data-ca-ai="' + it.id + '" title="이 주석에 AI로 질문">🤖</button>'
+            : "";
+          // 복사 — 캡처는 🖼(PNG), 형광펜·노트는 📋(텍스트). hover 미니툴바의 복사를 패널로도 미러링.
+          const copy = !canAi
+            ? ""
+            : it.type === "rect"
+            ? '<button class="ca-anno-copy" data-ca-copy="' + it.id +
+              '" data-kind="img" title="이 캡처를 이미지로 복사 (Notion·한글·Word)">🖼</button>'
+            : '<button class="ca-anno-copy" data-ca-copy="' + it.id +
+              '" data-kind="txt" title="이 텍스트를 복사">📋</button>';
           let inner;
           if (it.type === "highlight") {
             inner =
               '<div style="border-left:3px solid #ff7f50;background:#fff5f0!important;color:#222!important;' +
-              'margin:8px 0;padding:6px 28px 6px 10px;border-radius:4px">' + esc(it.text) + "</div>";
+              'margin:8px 0;padding:6px 72px 6px 10px;border-radius:4px">' + esc(it.text) + "</div>";
           } else if (it.type === "note") {
             inner =
               '<div class="ca-note" data-note-edit="' + it.id +
@@ -1599,7 +1664,7 @@
           }
           // 마지막 항목 뒤 gap 은 하단 상시 입력창과 중복이라 생략(상단·항목사이 삽입용 gap 만 유지).
           const after = i < items.length - 1 ? gap(it.id) : "";
-          return '<div class="ca-anno-item">' + inner + del + "</div>" + after;
+          return '<div class="ca-anno-item">' + inner + ai + copy + del + "</div>" + after;
         })
         .join("");
   }
@@ -1817,8 +1882,7 @@
       showPanel(stale ? "요약 (주석 변경됨 — 🔄로 갱신)" : "요약", summaryCache.text, true, "summary");
       return;
     }
-    const { gw_model } = await chrome.storage.local.get("gw_model");
-    const model = gw_model || "gemini-2.5-flash";
+    const model = await getActiveModel();
     const pageText = (document.body.innerText || "").slice(0, 8000);
     const hl = quotes.length
       ? quotes.map((q, i) => "(" + (i + 1) + ") " + q).join("\n")
