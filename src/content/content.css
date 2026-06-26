@@ -98,10 +98,10 @@ html.ca-ext-off .ca-hl {
   display: flex;
   gap: 4px;
   padding: 6px;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: #1e2228;
+  border: 1px solid #3a4048;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
   font-size: 13px;
   line-height: 1;
@@ -121,7 +121,7 @@ html.ca-ext-off .ca-hl {
 .ca-grip {
   align-self: center;
   cursor: move;
-  color: #bbb;
+  color: #6b727c;
   font-size: 14px;
   padding: 0 4px;
   user-select: none;
@@ -132,16 +132,16 @@ html.ca-ext-off .ca-hl {
   padding: 7px 10px;
   border-radius: 7px;
   cursor: pointer !important; /* 네모 모드의 crosshair !important 를 이김 */
-  color: #333;
+  color: #cdd3dc;
   white-space: nowrap;
   user-select: none;
 }
 .ca-toolbar button:hover {
-  background: #f1f1f1;
+  background: #2c323a;
 }
 .ca-toolbar button.active {
-  background: #ffe2d8;
-  color: #c0392b;
+  background: #3a2a24;
+  color: #ff8a65;
   font-weight: 600;
 }
 /* Notion = 최종 저장(주 액션) — 도구 3개(고스트)와 달리 코랄 solid fill 로 위계 차별화 */
@@ -158,7 +158,7 @@ html.ca-ext-off .ca-hl {
   width: 1px;
   align-self: stretch;
   margin: 4px 2px;
-  background: #e3e3e3;
+  background: #30353c;
 }
 
 /* 주석 위 hover 시 뜨는 미니 툴바 (저장/삭제) */
@@ -348,10 +348,10 @@ html.ca-ext-off .ca-hl {
   flex-direction: column;
   gap: 2px;
   padding: 6px;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: #1e2228;
+  border: 1px solid #3a4048;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
   font-size: 13px;
 }
@@ -360,11 +360,11 @@ html.ca-ext-off .ca-hl {
   padding: 8px 12px;
   border-radius: 7px;
   cursor: pointer !important;
-  color: #333;
+  color: #cdd3dc;
   white-space: nowrap;
 }
 .ca-menu button:hover {
-  background: #f1f1f1;
+  background: #2c323a;
 }
 
 /* AI 결과 패널 */
@@ -377,10 +377,10 @@ html.ca-ext-off .ca-hl {
   max-height: 70vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #d9d9d9;
+  background: #1e2228;
+  border: 1px solid #3a4048;
   border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.5);
   font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
 }
 .ca-panel-head {
@@ -388,7 +388,7 @@ html.ca-ext-off .ca-hl {
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #30353c;
   cursor: default; /* 패널은 도구막대 ⠿ 손잡이로만 이동 — 헤더 자체는 드래그 안 함 */
 }
 .ca-panel-head {
@@ -398,7 +398,7 @@ html.ca-ext-off .ca-hl {
   flex: 1;
   font-weight: 600;
   font-size: 13px;
-  color: #333;
+  color: #e6e9ef;
 }
 /* 최소화: 헤더만 남기고 본문 접기 */
 .ca-panel.ca-min .ca-panel-body {
@@ -422,29 +422,29 @@ html.ca-ext-off .ca-hl {
   width: 1px;
   align-self: stretch;
   margin: 3px 1px;
-  background: #e3e3e3;
+  background: #30353c;
 }
 /* 하위탭 (주석 정리 / AI 요약) */
 .ca-panel-tabs {
   display: flex;
   gap: 4px;
   padding: 6px 10px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #30353c;
 }
 .ca-panel-tabs .ca-tab {
   all: unset;
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 13px;
-  color: #666;
+  color: #9aa3af;
   cursor: pointer !important;
 }
 .ca-panel-tabs .ca-tab:hover {
-  background: #f1f1f1;
+  background: #2c323a;
 }
 .ca-panel-tabs .ca-tab.active {
-  background: #ffe2d8;
-  color: #c0392b;
+  background: #3a2a24;
+  color: #ff8a65;
   font-weight: 600;
 }
 /* 탭줄의 🔄 다시 요약(AI 요약 탭) · 🗑 전체삭제(주석 정리 탭) */
@@ -457,22 +457,22 @@ html.ca-ext-off .ca-hl {
   text-align: center;
   border-radius: 6px;
   font-size: 13px;
-  color: #666;
+  color: #9aa3af;
   cursor: pointer !important;
 }
 .ca-panel-tabs .ca-panel-resum:hover {
-  background: #f1f1f1;
+  background: #2c323a;
 }
 /* 🗑 전체삭제 — 삭제 동작이라 빨강 + 연한 배경으로 눈에 띄게, 탭줄 오른쪽 끝 */
 .ca-panel-tabs .ca-panel-clearall {
   margin-left: auto;
   width: auto;
   padding: 0 8px;
-  color: #c0392b;
-  background: #fdecea;
+  color: #ff7b6b;
+  background: #3a2422;
 }
 .ca-panel-tabs .ca-panel-clearall:hover {
-  background: #f7c8c1;
+  background: #4a2a26;
 }
 .ca-panel-head button {
   all: unset;
@@ -482,11 +482,11 @@ html.ca-ext-off .ca-hl {
   text-align: center;
   border-radius: 6px;
   cursor: pointer !important;
-  color: #666;
+  color: #9aa3af;
   font-size: 13px;
 }
 .ca-panel-head button:hover {
-  background: #f1f1f1;
+  background: #2c323a;
 }
 .ca-panel-body {
   padding: 12px 14px;
@@ -494,7 +494,7 @@ html.ca-ext-off .ca-hl {
   overscroll-behavior: contain; /* 끝까지 스크롤해도 페이지로 전파(스크롤 체이닝) 안 함 */
   font-size: 14px;
   line-height: 1.6;
-  color: #222;
+  color: #cdd3dc;
   white-space: pre-wrap;
 }
 .ca-panel-body .ca-line {
@@ -592,9 +592,9 @@ html.ca-ext-off .ca-hl {
 .ca-panel-body .ca-note {
   margin: 8px 0;
   padding: 6px 116px 6px 10px;
-  border-left: 3px solid #9ca3af;
-  background: #f6f7f9;
-  color: #222;
+  border-left: 3px solid #5a6472;
+  background: #262b32;
+  color: #cdd3dc;
   border-radius: 4px;
   font-size: 13px;
   white-space: pre-wrap;
@@ -604,20 +604,20 @@ html.ca-ext-off .ca-hl {
 .ca-panel-body .ca-cap {
   margin-top: 4px;
   padding: 3px 6px;
-  color: #555;
+  color: #9aa3af;
   font-size: 12px;
   border-radius: 4px;
   white-space: pre-wrap;
   outline: none;
 }
 .ca-panel-body .ca-cap:focus {
-  background: #f6f7f9;
+  background: #262b32;
 }
 /* 빈 편집칸 placeholder */
 .ca-panel-body .ca-note:empty::before,
 .ca-panel-body .ca-cap:empty::before {
   content: attr(data-ph);
-  color: #aaa;
+  color: #6b727c;
 }
 /* 노트 삽입 자리(+) — 평소 숨김, 그 자리에 hover 하면 가는 선과 + 버튼 노출 */
 .ca-panel-body .ca-note-gap {
@@ -634,15 +634,15 @@ html.ca-ext-off .ca-hl {
 .ca-panel-body .ca-note-add {
   all: unset;
   font-size: 11px;
-  color: #6b7280;
-  background: #eef0f3;
+  color: #9aa3af;
+  background: #2c323a;
   border-radius: 10px;
   padding: 1px 10px;
   cursor: pointer !important;
 }
 .ca-panel-body .ca-note-add:hover {
-  background: #e2e6ea;
-  color: #374151;
+  background: #363c44;
+  color: #cdd3dc;
 }
 /* 영상 캡처 타임스탬프 배지 — 클릭하면 그 장면으로 이동 */
 .ca-panel-body .ca-ts {
@@ -672,10 +672,10 @@ html.ca-ext-off .ca-hl {
   max-height: 120px;
   overflow-y: auto;
   overscroll-behavior: contain; /* 입력창 스크롤도 페이지로 전파 안 함 */
-  border: 1px solid #d0d3d9;
+  border: 1px solid #3a4048;
   border-radius: 6px;
-  background: #fff;
-  color: #222;
+  background: #262b32;
+  color: #cdd3dc;
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -687,7 +687,7 @@ html.ca-ext-off .ca-hl {
 }
 .ca-note-composer:empty::before {
   content: attr(data-ph);
-  color: #aaa;
+  color: #6b727c;
 }
 .ca-panel.ca-min .ca-note-composer {
   display: none;
@@ -697,44 +697,51 @@ html.ca-ext-off .ca-hl {
 .ca-rect-cursor .ca-note-composer {
   cursor: text !important;
 }
-/* 최상위 단락(1. 2. …) — 위에 한 칸 간격 + 제목색(파랑·굵게) */
+/* 최상위 단락(1. 2. …) — 위에 한 칸 간격 + 제목색(밝은 파랑·굵게, 다크 배경용) */
 .ca-panel-body .ca-sec {
   margin-top: 16px;
   font-weight: 700;
-  color: #1a5fb4;
+  color: #ef9a4d; /* 최상위 1. = 주황 (.ca-l1과 동일) */
 }
 .ca-panel-body .ca-sec:first-child {
   margin-top: 0;
 }
+/* Q&A 답변의 ## 섹션 제목 = 보라 (요약 4단계 외 5번째 색) */
 .ca-panel-body .ca-md-h {
   font-weight: 700;
-  color: #1a5fb4;
+  color: #b794f6;
   margin: 12px 0 4px;
   font-size: 15px;
 }
+/* 굵게(**) — 색은 안 입히고 밝은 흰색 볼드로만(코드·표시 강조와 색이 안 겹치게) */
+.ca-panel-body strong {
+  color: #f0f3f8;
+  font-weight: 700;
+}
 /* 주석(형광펜·네모) 유래 항목 — 텍스트에만 코랄 배경 (들여쓴 빈 공간엔 안 깔림) */
 .ca-panel-body .ca-anno-mark {
-  background: rgba(255, 127, 80, 0.22);
+  background: rgba(255, 127, 80, 0.28);
   border-radius: 3px;
   padding: 0 3px;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* 하위 단계 번호 마커 색 (가.=초록, 1)=주황, 가)=보라) */
+/* 하위 단계 번호 마커 색 (가.=초록, 1)=주황, 가)=보라) — 다크 배경용으로 밝게 */
 .ca-panel-body .ca-mk {
   font-weight: 600;
 }
+/* 레벨 색(따뜻→차가움): 1.=주황 가.=노랑 1)=파랑 가)=초록. 마커+제목에 적용. */
 .ca-panel-body .ca-l1 {
-  color: #1a5fb4;
+  color: #ef9a4d; /* 1. = 주황 (빨강 사용자백틱과 분리되게 더 노란 주황) */
 }
 .ca-panel-body .ca-l2 {
-  color: #1d7a6f;
+  color: #ffd28a; /* 가. = 상아빛 골드 (밝은 노랑은 주황을 희석 → AI Dictionary 헤딩색으로 차분하게) */
 }
 .ca-panel-body .ca-l3 {
-  color: #b45309;
+  color: #5b9cf0; /* 1) = 파랑 */
 }
 .ca-panel-body .ca-l4 {
-  color: #7c3aed;
+  color: #57c98a; /* 가) = 초록 (AI 백틱 청록 #5cc8d8과 벌리려 더 풀색) */
 }
 /* 빨강 표시 hover 삭제(×) */
 .ca-markdel {
@@ -752,13 +759,36 @@ html.ca-ext-off .ca-hl {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: pointer !important;
 }
-/* 백틱 표시 — 노션처럼 빨강 */
+/* 원문 인용 — 사용자가 강조해 질문한 '그 문장'을 답변 맨 위에 차분한 파랑 박스로(표시 전용) */
+.ca-panel-body .ca-src-quote {
+  margin: 0 0 12px;
+  padding: 8px 11px;
+  border-left: 3px solid #6ea8e8;
+  background: rgba(110, 168, 232, 0.12);
+  border-radius: 4px;
+  color: #a8c5ec;
+  font-family: "Consolas", "Malgun Gothic", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+/* AI 강조 — 모델이 백틱으로 짚은 부분: 청록 + 밑줄 (AI Dictionary --code-fg와 통일) */
 .ca-panel-body code {
-  color: #e2552e;
-  background: rgba(226, 85, 46, 0.1);
+  color: #5cc8d8;
+  background: rgba(92, 200, 216, 0.13);
   padding: 1px 4px;
   border-radius: 4px;
   font-family: "Consolas", monospace;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(92, 200, 216, 0.6);
+  text-underline-offset: 2px;
+}
+/* 사용자 표시 — 내가 패널에서 백틱으로 그은 부분: 빨강 + 밑줄. AI 청록과 또렷이 분리(AI Dictionary user-hl) */
+.ca-panel-body code.ca-mark {
+  color: #e2552e;
+  background: rgba(226, 85, 46, 0.13);
+  text-decoration-color: rgba(226, 85, 46, 0.6);
 }
 /* 빨강 표시 버튼: `A` — 백틱은 회색, 가운데 A만 빨강(코드 느낌 + 글자 강조 의미) */
 .ca-panel-mark {
@@ -768,11 +798,11 @@ html.ca-ext-off .ca-hl {
   font-size: 13px !important;
 }
 .ca-panel-mark .ca-mark-a {
-  color: #e2552e;
+  color: #ff8a65;
   font-weight: 800;
 }
 .ca-panel-mark.active {
-  background: #ffe2d8 !important;
+  background: #3a2a24 !important;
 }
 
 /* 인쇄/PDF 출력에는 확장 UI를 숨김 */

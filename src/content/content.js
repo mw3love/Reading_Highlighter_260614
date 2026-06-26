@@ -416,7 +416,9 @@
   panelBody.addEventListener("scroll", () => {
     if (markDelTarget && markDel.style.display !== "none") placeMarkDel();
   });
-  function showPanel(title, text, isMd, kind) {
+  // srcQuote: 답변 위에 보여줄 '원문 인용'(표시 전용). panelRaw·복사·Notion 직렬화엔 안 들어감.
+  // honorAnno=false 면 ★ 등 마커를 코랄 강조로 칠하지 않음(강조 0개 요약의 거짓 신호 방지).
+  function showPanel(title, text, isMd, kind, srcQuote, honorAnno = true) {
     panel.classList.remove("ca-min"); // 새 내용이 오면 펼침
     minBtn.textContent = "▾";
     panel.querySelector(".ca-panel-title").textContent = title;
@@ -426,7 +428,12 @@
     panelRaw = text;
     if (isMd) {
       panelBody.style.whiteSpace = "normal";
-      panelBody.innerHTML = renderMarkdown(text);
+      const quoteHtml = srcQuote
+        ? "<div class='ca-src-quote'>" +
+          String(srcQuote).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])) +
+          "</div>"
+        : "";
+      panelBody.innerHTML = quoteHtml + renderMarkdown(text, honorAnno);
     } else {
       panelBody.style.whiteSpace = "pre-wrap";
       panelBody.textContent = text;
@@ -438,7 +445,9 @@
 
   // 아웃라인 렌더러 — 모델이 쓴 번호/들여쓰기를 그대로 보존(사이트 CSS 영향 안 받음).
   // 줄 앞 🖍 = 사용자 주석(형광펜/네모)에서 나온 항목 → 코랄 강조. 출력은 escape 후 생성.
-  function renderMarkdown(src) {
+  // honorAnno=false 면 모델이 남긴 마커(★ 등)를 코랄 강조로 칠하지 않고 텍스트에서 제거만 한다
+  // (강조가 0개였던 요약의 거짓 신호 방지 — 마커가 새어 나와도 일반 항목으로 렌더).
+  function renderMarkdown(src, honorAnno = true) {
     const esc = (s) =>
       String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
     const inline = (s) =>
@@ -461,7 +470,7 @@
       const annoRe = /(?:🖍|✏|🖊|🖌|📍|★|☆)️?/gu;
       let annotated = false;
       if (annoRe.test(t)) {
-        annotated = true;
+        annotated = honorAnno; // 강조 0개 요약이면 코랄 칠 안 함 — 마커는 아래서 제거만
         t = t.replace(annoRe, "").replace(/\s{2,}/g, " ").trim();
       }
       t = t.replace(/^[-*]\s+/, "• "); // 불릿 기호 통일
@@ -476,13 +485,25 @@
         else lvl = "ca-l4";
       }
       const topLevel = !h && spaces === 0 && lvl === "ca-l1";
+      // 1.(최상위)·가. = 짧은 헤딩 → 줄 전체 색. 1)·가) = '제목: 내용' 구조라 본문까지 색칠하면 산만 → 제목만 색.
+      const fullLine = topLevel || lvl === "ca-l2";
       if (topLevel) classes.push("ca-sec"); // 최상위 단락 = 파란 제목 + 간격
+      else if (!h && lvl === "ca-l2") classes.push(lvl); // 가. = 줄 전체 색
 
       let inner;
       if (!h && mk && !topLevel) {
-        // 하위 단계: 번호 마커만 색칠, 본문은 기본색
-        inner =
-          "<span class='ca-mk " + lvl + "'>" + esc(mk[1]) + "</span> " + inline(t.slice(mk[0].length));
+        const marker = "<span class='ca-mk " + lvl + "'>" + esc(mk[1]) + "</span> ";
+        const rest = t.slice(mk[0].length);
+        if (fullLine) {
+          // 가.: 줄(.ca-line)의 레벨 클래스가 전체를 색칠
+          inner = marker + inline(rest);
+        } else {
+          // 1)·가): 콜론 앞 '제목'까지만 색, 뒤 본문은 기본색. 콜론 없으면 마커만 색.
+          const cm = rest.match(/^([^:：]{1,40}[:：])(\s*)([\s\S]*)$/);
+          inner = cm
+            ? marker + "<span class='" + lvl + "'>" + inline(cm[1]) + "</span>" + cm[2] + inline(cm[3])
+            : marker + inline(rest);
+        }
       } else {
         inner = inline(t);
       }
@@ -1508,7 +1529,7 @@
       },
       (resp) => {
         if (chrome.runtime.lastError) return showPanel(title, "오류: " + chrome.runtime.lastError.message, false);
-        if (resp && resp.ok) showPanel(title, resp.reply, true, "qa");
+        if (resp && resp.ok) showPanel(title, resp.reply, true, "qa", isRect ? null : ann.text);
         else showPanel(title, "실패: " + ((resp && resp.error) || "알 수 없음"), false);
       }
     );
@@ -1953,17 +1974,26 @@
     const sig = quotes.join("|") + "##" + rects.map((r) => (r.image || "").length).join(",");
     if (!force && summaryCache) {
       const stale = summaryCache.sig !== sig;
-      showPanel(stale ? "요약 (주석 변경됨 — 🔄로 갱신)" : "요약", summaryCache.text, true, "summary");
+      showPanel(stale ? "요약 (주석 변경됨 — 🔄로 갱신)" : "요약", summaryCache.text, true, "summary", null, summaryCache.hasMarks);
       return;
     }
     const model = await getActiveModel();
     const pageText = (document.body.innerText || "").slice(0, 8000);
+    const hasMarks = quotes.length > 0 || rects.length > 0;
     const hl = quotes.length
       ? quotes.map((q, i) => "(" + (i + 1) + ") " + q).join("\n")
       : "(강조된 부분 없음)";
+    // ★ 규칙은 강조/캡처가 실제로 있을 때만 넣는다 — 없을 때 넣으면 모델이 임의 항목에 ★를
+    // 붙여 '사용자 강조'로 오인되는 코랄 배경이 생김(빈 강조 시 거짓 신호 방지).
+    const starRule = hasMarks
+      ? "- 사용자가 직접 강조(형광펜)하거나 캡처(네모)한 내용에서 나온 항목은 번호 바로 뒤, 내용 앞에 '★ ' 를 붙인다. " +
+        "페이지 전체에서 보충한 내용은 마커 없이.\n"
+      : "- 강조/캡처가 없으므로 어떤 항목에도 '★' 등 별도 마커를 붙이지 말 것.\n";
     const prompt =
-      "아래 웹페이지를 한국어로 요약하라. 사용자가 형광펜으로 강조한 부분과 네모로 캡처한 이미지를 " +
-      "가장 중요하게 다루고, 그 부분을 중심으로 핵심만 정리하라.\n" +
+      "아래 웹페이지를 한국어로 요약하라. " +
+      (hasMarks
+        ? "사용자가 형광펜으로 강조한 부분과 네모로 캡처한 이미지를 가장 중요하게 다루고, 그 부분을 중심으로 핵심만 정리하라.\n"
+        : "핵심만 정리하라.\n") +
       "[출력 형식 규칙]\n" +
       "- 논문식 번호 아웃라인으로 계층을 표현하고, 각 하위 단계는 공백 4칸씩 더 들여쓴다:\n" +
       "    1단계: '1.' '2.'  (들여쓰기 0)\n" +
@@ -1973,8 +2003,7 @@
       "- 불릿(-)은 순서가 의미 없는 단순 나열에만 제한적으로 사용.\n" +
       "- 개조식으로 작성. 문장 끝의 '~입니다/~합니다/~이다' 같은 종결어미를 제거하고 명사형으로 끝맺기. " +
       "(예: '요약하는 방법입니다' → '요약하는 방법')\n" +
-      "- 사용자가 직접 강조(형광펜)하거나 캡처(네모)한 내용에서 나온 항목은 번호 바로 뒤, 내용 앞에 '★ ' 를 붙인다. " +
-      "페이지 전체에서 보충한 내용은 마커 없이.\n" +
+      starRule +
       "- 군더더기 머리말 없이 요점만.\n\n" +
       "[강조한 부분]\n" + hl + "\n\n" +
       (rects.length ? "[캡처 이미지] " + rects.length + "장 첨부됨 — 내용도 요약에 반영(이 항목들도 ★ 표시)\n\n" : "") +
@@ -1990,8 +2019,8 @@
       (resp) => {
         if (chrome.runtime.lastError) return showPanel("요약", "오류: " + chrome.runtime.lastError.message, false);
         if (resp && resp.ok) {
-          summaryCache = { sig, text: resp.reply };
-          showPanel("요약", resp.reply, true, "summary");
+          summaryCache = { sig, text: resp.reply, hasMarks };
+          showPanel("요약", resp.reply, true, "summary", null, hasMarks);
         } else showPanel("요약", "실패: " + ((resp && resp.error) || "알 수 없음"), false);
       }
     );
